@@ -28,54 +28,136 @@
   <!-- Products -->
   <section class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
-    <div class="relative mb-4">
-      <i class="fas fa-barcode absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" aria-hidden="true"></i>
-      <input type="text" id="posSearch" placeholder="Scan barcode or search drug / SKU…"
-        autocomplete="off"
-        class="pl-11 pr-10 py-3.5 border border-gray-200 rounded-xl text-sm outline-none transition
-               focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 w-full bg-white shadow-sm">
-      <button type="button" id="clearSearch"
-        class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-lg hover:bg-primary/5 transition"
-        aria-label="Clear search">
-        <i class="fas fa-xmark text-sm"></i>
+    <!-- Search + barcode toggle -->
+    <div class="flex gap-2 mb-3">
+      <div class="relative flex-1">
+        <i class="fas fa-barcode absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" aria-hidden="true"></i>
+        <input type="text" id="posSearch" placeholder="Scan barcode or search drug / SKU…"
+          autocomplete="off"
+          aria-label="Search products"
+          class="pl-11 pr-10 py-3.5 border border-gray-200 rounded-xl text-sm outline-none transition
+                 focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 w-full bg-white shadow-sm">
+        <button type="button" id="clearSearch"
+          class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-lg hover:bg-primary/5 transition"
+          aria-label="Clear search">
+          <i class="fas fa-xmark text-sm"></i>
+        </button>
+      </div>
+      <button type="button" id="barcodeToggle"
+        class="flex-shrink-0 px-3 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-500 hover:text-primary transition flex items-center gap-2 text-xs font-semibold"
+        title="Toggle barcode scan mode"
+        aria-label="Toggle barcode scan mode">
+        <i class="fas fa-barcode text-sm"></i>
+        <span class="hidden sm:inline">Scan</span>
       </button>
     </div>
 
+    <!-- Recently sold (only if variable provided) -->
+    {% if recent_items is defined and recent_items %}
+    <div class="mb-4">
+      <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 inline-flex items-center gap-1.5">
+        <i class="fas fa-clock-rotate-left text-[9px]"></i> Recently sold
+      </p>
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {% for r in recent_items[:8] %}
+        <button type="button"
+          class="recent-chip flex-shrink-0 bg-white border border-gray-100 hover:border-primary/30 hover:shadow-md transition-all rounded-lg px-3 py-2 text-left min-w-[140px] active:scale-95"
+          data-id="{{ r._id }}"
+          data-name="{{ r.name|e }}"
+          data-price="{{ r.selling_price }}"
+          data-stock="{{ r.quantity }}"
+          data-search="{{ (r.name ~ ' ' ~ r.sku)|lower|e }}">
+          <p class="text-xs font-semibold text-gray-800 truncate">{{ r.name }}</p>
+          <div class="flex items-center justify-between mt-0.5">
+            <span class="text-[10px] text-gray-400 font-mono truncate">{{ r.sku }}</span>
+            <span class="text-[10px] text-primary font-bold">{{ r.selling_price|ghs }}</span>
+          </div>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Filter chips + sort -->
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Product filters">
+        <button data-cat="all" class="cat-chip active bg-primary text-white text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All
+        </button>
+        <button data-cat="Antibiotic" class="cat-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          Antibiotic
+        </button>
+        <button data-cat="Analgesic" class="cat-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          Analgesic
+        </button>
+        <button data-cat="Antimalarial" class="cat-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          Antimalarial
+        </button>
+        <button data-cat="Supplement" class="cat-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          Supplement
+        </button>
+        <button data-cat="First aid" class="cat-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          First aid
+        </button>
+      </div>
+
+      <div class="relative flex-shrink-0">
+        <select id="posSort" aria-label="Sort products"
+          class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+          <option value="default">Sort</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="price-asc">Price (low → high)</option>
+          <option value="price-desc">Price (high → low)</option>
+          <option value="stock-asc">Stock (low → high)</option>
+        </select>
+        <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+      </div>
+    </div>
+
     <div class="flex items-center justify-between mb-3">
-      <p class="text-[11px] text-gray-400 uppercase tracking-wide font-semibold">
+      <p class="text-[11px] text-gray-400 uppercase tracking-wide font-semibold" aria-live="polite">
         <span id="visibleCount">{{ products|length }}</span> product{{ '' if products|length == 1 else 's' }}
       </p>
       <p class="text-[11px] text-gray-400">
-        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white text-[10px] font-mono">F2</kbd> focus search
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white text-[10px] font-mono">F2</kbd> focus ·
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white text-[10px] font-mono">Enter</kbd> add
       </p>
     </div>
 
     <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
       {% for p in products %}
+      {% set out = p.quantity <= 0 %}
       <button type="button"
-        class="product-card group text-left bg-white rounded-xl p-3 border border-gray-100 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200 active:scale-95"
+        class="product-card group text-left bg-white rounded-xl p-3 border border-gray-100 transition-all duration-200
+               {% if out %}opacity-50 cursor-not-allowed{% else %}hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 active:scale-95{% endif %}"
         data-id="{{ p._id }}"
         data-name="{{ p.name|e }}"
         data-price="{{ p.selling_price }}"
         data-stock="{{ p.quantity }}"
-        data-search="{{ (p.name ~ ' ' ~ p.sku)|lower|e }}">
+        data-category="{{ p.category|e if p.category else '' }}"
+        data-search="{{ (p.name ~ ' ' ~ p.sku)|lower|e }}"
+        {% if out %}disabled aria-disabled="true"{% endif %}>
+
         <div class="flex items-start justify-between gap-2 mb-2">
-          <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-white transition">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition
+            {% if out %}bg-gray-100 text-gray-400{% else %}bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white{% endif %}">
             <i class="fas fa-pills text-xs"></i>
           </div>
-          {% if p.quantity <= p.min_threshold %}
-          <span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">LOW</span>
+          {% if out %}
+            <span class="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full">OUT</span>
+          {% elif p.quantity <= p.min_threshold %}
+            <span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">LOW</span>
           {% endif %}
         </div>
         <p class="font-semibold text-sm text-gray-800 line-clamp-2 leading-snug">{{ p.name }}</p>
         <p class="text-[11px] text-gray-400 truncate mt-0.5 font-mono">{{ p.sku }}</p>
         <div class="flex items-center justify-between mt-2">
           <p class="font-bold text-primary text-sm">{{ p.selling_price|ghs }}</p>
-          <p class="text-[10px] text-gray-400">×{{ p.quantity }}</p>
+          <p class="text-[10px] {% if out %}text-rose-500 font-semibold{% else %}text-gray-400{% endif %}">×{{ p.quantity }}</p>
         </div>
       </button>
       {% else %}
-      <div class="col-span-full p-10 text-center text-gray-400">
+      <div class="col-span-full p-10 text-center text-gray-400" role="status">
         <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
           <i class="fas fa-capsules text-2xl text-gray-300"></i>
         </div>
@@ -85,9 +167,13 @@
       {% endfor %}
     </div>
 
-    <div id="noProducts" class="hidden mt-10 text-center text-gray-400">
+    <div id="noProducts" class="hidden mt-10 text-center text-gray-400" role="status">
       <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
       <p class="text-sm font-medium">No products match your search.</p>
+      <button type="button" onclick="clearPosFilters()"
+        class="mt-3 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+        <i class="fas fa-rotate-left text-[10px]"></i> Clear filters
+      </button>
     </div>
   </section>
 
@@ -102,7 +188,10 @@
         </div>
         <div>
           <h2 class="font-bold text-gray-800 text-sm">Current order</h2>
-          <p class="text-[11px] text-gray-400"><span id="cartCount">0</span> item<span id="cartPlural"></span></p>
+          <p class="text-[11px] text-gray-400">
+            <span id="cartCount" aria-live="polite">0</span> item<span id="cartPlural"></span>
+            <span id="cartMiniTotal" class="text-primary font-bold"></span>
+          </p>
         </div>
       </div>
       <div class="flex items-center gap-1">
@@ -114,8 +203,24 @@
         <button id="clearCartBtn" type="button"
           class="text-[11px] text-gray-500 hover:text-rose-500 transition flex items-center gap-1 px-2 py-2 rounded-lg hover:bg-rose-50"
           title="Clear cart">
-          <i class="fas fa-trash-alt"></i>
+          <i class="fas fa-trash-alt"></i> Clear
         </button>
+      </div>
+    </div>
+
+    <!-- Customer + discount (optional) -->
+    <div class="px-4 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50/40">
+      <div class="grid grid-cols-2 gap-2">
+        <div class="relative">
+          <i class="fas fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]" aria-hidden="true"></i>
+          <input type="text" id="posCustomer" placeholder="Customer (optional)"
+            class="w-full pl-8 pr-2 py-2 text-xs border border-gray-200 rounded-lg outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 bg-white">
+        </div>
+        <div class="relative">
+          <i class="fas fa-percent absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]" aria-hidden="true"></i>
+          <input type="number" id="posDiscount" min="0" max="100" step="0.5" placeholder="Discount %"
+            class="w-full pl-8 pr-2 py-2 text-xs border border-gray-200 rounded-lg outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 bg-white">
+        </div>
       </div>
     </div>
 
@@ -140,6 +245,10 @@
         <div class="flex justify-between text-sm">
           <span class="text-gray-500">VAT</span>
           <span id="vat" class="text-gray-700 font-medium">GH₵ 0.00</span>
+        </div>
+        <div id="discountRow" class="hidden flex justify-between text-sm">
+          <span class="text-rose-500">Discount</span>
+          <span id="discountAmount" class="text-rose-500 font-medium">-GH₵ 0.00</span>
         </div>
         <div class="flex justify-between items-baseline pt-2 mt-2 border-t border-dashed border-gray-200">
           <span class="font-bold text-gray-800">Total</span>
@@ -171,6 +280,7 @@
 
       <p class="text-[10px] text-gray-400 text-center">
         <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">F9</kbd> charge ·
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">F4</kbd> hold ·
         <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">Esc</kbd> clear
       </p>
     </div>
@@ -193,18 +303,32 @@
       </div>
     </div>
     <div class="p-5 text-sm" id="receiptBody"></div>
-    <div class="px-5 pb-5 grid grid-cols-2 gap-2">
+    <div class="px-5 pb-3 grid grid-cols-3 gap-2">
       <button type="button" onclick="closeReceipt()"
-        class="border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-semibold py-3 rounded-xl transition">
+        class="border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-xs font-semibold py-3 rounded-xl transition">
         <i class="fas fa-times mr-1"></i> Close
       </button>
+      <button type="button" onclick="copyReceiptText()"
+        class="border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-xs font-semibold py-3 rounded-xl transition">
+        <i class="fas fa-copy mr-1"></i> Copy
+      </button>
       <button type="button" onclick="window.print()"
-        class="btn-primary bg-primary hover:bg-primaryLight text-white text-sm font-bold py-3 rounded-xl transition">
+        class="btn-primary bg-primary hover:bg-primaryLight text-white text-xs font-bold py-3 rounded-xl transition">
         <i class="fas fa-print mr-1"></i> Print
       </button>
     </div>
   </div>
 </div>
+
+<!-- Toast -->
+<div id="posToast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i id="posToastIcon" class="fas fa-check-circle text-emerald-400"></i>
+    <span id="posToastMsg">Added to cart</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -217,70 +341,293 @@
     initialCart: {{ (initial_cart if initial_cart is defined else [])|tojson }}
   };
 
-  // ---- UX enhancements that don't clash with pos.js ----
+  /* ---------- Toast ---------- */
+  window.showPosToast = function (msg, kind) {
+    var t = document.getElementById('posToast');
+    var m = document.getElementById('posToastMsg');
+    var i = document.getElementById('posToastIcon');
+    if (!t || !m || !i) return;
+    m.textContent = msg;
+    if (kind === 'error') {
+      i.className = 'fas fa-exclamation-circle text-rose-400';
+    } else if (kind === 'warn') {
+      i.className = 'fas fa-exclamation-triangle text-amber-400';
+    } else {
+      i.className = 'fas fa-check-circle text-emerald-400';
+    }
+    t.classList.remove('opacity-0', 'translate-y-3');
+    t.classList.add('opacity-100', 'translate-y-0');
+    clearTimeout(window.__posToastTimer);
+    window.__posToastTimer = setTimeout(function () {
+      t.classList.add('opacity-0', 'translate-y-3');
+      t.classList.remove('opacity-100', 'translate-y-0');
+    }, 1600);
+  };
+
+  /* ---------- Product filter / search / sort ---------- */
+  var activeCat = 'all';
+  var barcodeMode = false;
+
+  function applyPosFilters() {
+    var grid = document.getElementById('productGrid');
+    var search = document.getElementById('posSearch');
+    var noProducts = document.getElementById('noProducts');
+    var visibleCount = document.getElementById('visibleCount');
+    var clearSearch = document.getElementById('clearSearch');
+    if (!grid) return;
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+
+    grid.querySelectorAll('.product-card').forEach(function (card) {
+      var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
+      var mc = activeCat === 'all' || card.dataset.category === activeCat;
+      var show = ms && mc;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noProducts) noProducts.classList.toggle('hidden', visible > 0);
+    if (visibleCount) visibleCount.textContent = visible;
+    if (clearSearch) clearSearch.classList.toggle('hidden', !q);
+  }
+
+  function clearPosFilters() {
+    activeCat = 'all';
+    var search = document.getElementById('posSearch');
+    if (search) search.value = '';
+    document.querySelectorAll('.cat-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.cat-chip[data-cat="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var sortSel = document.getElementById('posSort');
+    if (sortSel) sortSel.value = 'default';
+    sortProducts('default');
+    applyPosFilters();
+  }
+
+  function sortProducts(mode) {
+    var grid = document.getElementById('productGrid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.product-card'));
+    if (!cards.length) return;
+    cards.sort(function (a, b) {
+      function num(v) { return parseFloat(v) || 0; }
+      switch (mode) {
+        case 'name': return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        case 'price-asc': return num(a.dataset.price) - num(b.dataset.price);
+        case 'price-desc': return num(b.dataset.price) - num(a.dataset.price);
+        case 'stock-asc': return num(a.dataset.stock) - num(b.dataset.stock);
+        default: return 0;
+      }
+    });
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  /* ---------- Wire up ---------- */
   (function () {
     var search = document.getElementById('posSearch');
     var clearSearch = document.getElementById('clearSearch');
-    var grid = document.getElementById('productGrid');
-    var noProducts = document.getElementById('noProducts');
-    var visibleCount = document.getElementById('visibleCount');
-
-    function applyFilter() {
-      if (!grid) return;
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var visible = 0;
-      grid.querySelectorAll('.product-card').forEach(function (card) {
-        var match = !q || card.dataset.search.indexOf(q) !== -1;
-        card.style.display = match ? '' : 'none';
-        if (match) visible++;
-      });
-      if (noProducts) noProducts.classList.toggle('hidden', visible > 0);
-      if (visibleCount) visibleCount.textContent = visible;
-      if (clearSearch) clearSearch.classList.toggle('hidden', !q);
-    }
+    var sortSel = document.getElementById('posSort');
+    var barcodeBtn = document.getElementById('barcodeToggle');
 
     if (search) {
-      search.addEventListener('input', applyFilter);
-      // Auto-focus the search on page load for fast scanning
+      search.addEventListener('input', applyPosFilters);
       setTimeout(function () { search.focus(); }, 150);
     }
     if (clearSearch) {
       clearSearch.addEventListener('click', function () {
-        if (search) { search.value = ''; search.focus(); applyFilter(); }
+        if (search) { search.value = ''; search.focus(); }
+        applyPosFilters();
       });
     }
 
-    // Keyboard shortcuts (don't fight pos.js handlers — additive)
+    document.querySelectorAll('.cat-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.cat-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeCat = chip.dataset.cat;
+        applyPosFilters();
+      });
+    });
+
+    if (sortSel) {
+      sortSel.addEventListener('change', function () { sortProducts(this.value); });
+    }
+
+    if (barcodeBtn) {
+      barcodeBtn.addEventListener('click', function () {
+        barcodeMode = !barcodeMode;
+        barcodeBtn.classList.toggle('bg-primary', barcodeMode);
+        barcodeBtn.classList.toggle('text-white', barcodeMode);
+        barcodeBtn.classList.toggle('border-primary', barcodeMode);
+        barcodeBtn.classList.toggle('text-gray-500', !barcodeMode);
+        barcodeBtn.classList.toggle('border-gray-200', !barcodeMode);
+        if (barcodeMode) {
+          showPosToast('Barcode scan mode ON — press Enter to add', 'warn');
+          if (search) search.focus();
+        } else {
+          showPosToast('Barcode scan mode OFF');
+        }
+      });
+    }
+
+    /* Enter in search: if barcode mode is on OR exactly one product matches, add it */
+    if (search) {
+      search.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var q = (search.value || '').toLowerCase().trim();
+        if (!q) return;
+
+        var matched = null;
+        document.querySelectorAll('.product-card').forEach(function (card) {
+          if (matched) return;
+          if (card.style.display === 'none') return;
+          if ((card.dataset.search || '').indexOf(q) !== -1) matched = card;
+        });
+
+        if (matched && !matched.disabled) {
+          matched.click();
+          if (barcodeMode) {
+            search.value = '';
+            applyPosFilters();
+          }
+        } else if (matched && matched.disabled) {
+          showPosToast('This product is out of stock', 'error');
+        } else if (barcodeMode) {
+          showPosToast('No product found for "' + q + '"', 'error');
+        }
+      });
+    }
+
+    /* F2 = focus search, F4 = hold, F9 = charge, Esc = clear search */
     document.addEventListener('keydown', function (e) {
-      // F2 → focus search
       if (e.key === 'F2') {
         e.preventDefault();
         if (search) search.focus();
       }
-      // Escape → clear search if focused
-      if (e.key === 'Escape' && document.activeElement === search && search.value) {
-        e.preventDefault();
-        search.value = '';
-        applyFilter();
+      if (e.key === 'F4') {
+        var holdBtn = document.getElementById('holdBtn');
+        if (holdBtn) { e.preventDefault(); holdBtn.click(); }
       }
-      // F9 → click charge
       if (e.key === 'F9') {
         var btn = document.getElementById('chargeBtn');
         if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
       }
+      if (e.key === 'Escape' && document.activeElement === search && search.value) {
+        e.preventDefault();
+        search.value = '';
+        applyPosFilters();
+      }
     });
+  })();
 
-    // Cart count plural
+  /* ---------- Cart count plural + mini total on header ---------- */
+  (function () {
     var cartCount = document.getElementById('cartCount');
     var cartPlural = document.getElementById('cartPlural');
-    if (cartCount && cartPlural && window.MutationObserver) {
-      var obs = new MutationObserver(function () {
-        var n = parseInt(cartCount.textContent, 10) || 0;
-        cartPlural.textContent = n === 1 ? '' : 's';
-      });
-      obs.observe(cartCount, { childList: true, characterData: true, subtree: true });
+    var cartMiniTotal = document.getElementById('cartMiniTotal');
+    var total = document.getElementById('total');
+
+    function syncMini() {
+      var n = parseInt(cartCount && cartCount.textContent, 10) || 0;
+      if (cartPlural) cartPlural.textContent = n === 1 ? '' : 's';
+      if (cartMiniTotal && total) {
+        var t = total.textContent.trim();
+        cartMiniTotal.textContent = (n > 0 && t) ? ' · ' + t : '';
+      }
+    }
+
+    if (window.MutationObserver) {
+      var obs = new MutationObserver(syncMini);
+      if (cartCount) obs.observe(cartCount, { childList: true, characterData: true, subtree: true });
+      if (total) obs.observe(total, { childList: true, characterData: true, subtree: true });
     }
   })();
+
+  /* ---------- Recently sold chips behave like product cards ---------- */
+  (function () {
+    document.querySelectorAll('.recent-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var id = chip.dataset.id;
+        var card = document.querySelector('.product-card[data-id="' + id + '"]');
+        if (card) {
+          if (card.disabled) { showPosToast('Product is out of stock', 'error'); return; }
+          card.click();
+          return;
+        }
+        // Fallback: synthesize a click with the chip's own data
+        // (pos.js reads from the clicked element's data attributes)
+        // If pos.js requires a .product-card element, this fallback is a no-op.
+      });
+    });
+  })();
+
+  /* ---------- Discount field: show/hide row + relay to pos.js if it listens ---------- */
+  (function () {
+    var discount = document.getElementById('posDiscount');
+    var row = document.getElementById('discountRow');
+    var amt = document.getElementById('discountAmount');
+    var subtotal = document.getElementById('subtotal');
+    if (!discount) return;
+
+    discount.addEventListener('input', function () {
+      var pct = parseFloat(discount.value) || 0;
+      var subText = subtotal ? subtotal.textContent.replace(/[^\d.]/g, '') : '0';
+      var sub = parseFloat(subText) || 0;
+      if (pct > 0 && row) {
+        row.classList.remove('hidden');
+        row.classList.add('flex');
+        if (amt) amt.textContent = '-GH₵ ' + (sub * pct / 100).toFixed(2);
+      } else if (row) {
+        row.classList.add('hidden');
+        row.classList.remove('flex');
+      }
+    });
+  })();
+
+  /* ---------- Customer field: persist per session ---------- */
+  (function () {
+    var c = document.getElementById('posCustomer');
+    if (!c) return;
+    try {
+      var saved = sessionStorage.getItem('pharmacole_pos_customer');
+      if (saved) c.value = saved;
+    } catch (e) {}
+    c.addEventListener('input', function () {
+      try { sessionStorage.setItem('pharmacole_pos_customer', c.value); } catch (e) {}
+    });
+  })();
+
+  /* ---------- Copy receipt text ---------- */
+  window.copyReceiptText = function () {
+    var body = document.getElementById('receiptBody');
+    if (!body) return;
+    var text = body.innerText || body.textContent || '';
+    function done() { showPosToast('Receipt copied'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text); done();
+    }
+    function fallbackCopy(t) {
+      var ta = document.createElement('textarea');
+      ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
+  };
 </script>
 <script src="{{ url_for('static', filename='js/pos.js') }}"></script>
 {% endblock %}

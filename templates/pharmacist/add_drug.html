@@ -14,13 +14,35 @@
       <p class="text-xs text-gray-400 truncate hidden sm:block">Create a new inventory item</p>
     </div>
   </div>
-  <span class="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-    <i class="fas fa-circle-info text-primary"></i> Fields marked <span class="text-rose-500 font-bold">*</span> are required
-  </span>
+  <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
+    <span class="inline-flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+      <i class="fas fa-circle-info text-primary"></i> <span class="text-rose-500 font-bold">*</span> required
+    </span>
+  </div>
 </header>
 
+<!-- Progress bar -->
+<div class="bg-white border-b border-gray-100 flex-shrink-0">
+  <div class="max-w-4xl mx-auto px-4 md:px-6 py-2.5 flex items-center gap-3">
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <i class="fas fa-circle-check text-[10px] text-primary"></i>
+      <span class="text-[11px] font-semibold text-gray-600">
+        <span id="progressText">0 / 4</span> required
+      </span>
+    </div>
+    <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"
+         role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0" id="progressBar">
+      <div id="progressFill" class="h-full bg-gradient-to-r from-primary to-primaryLight rounded-full transition-all duration-500" style="width: 0%"></div>
+    </div>
+    <button type="button" onclick="resetForm()"
+      class="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-rose-500 transition">
+      <i class="fas fa-rotate-left text-[10px]"></i> Reset
+    </button>
+  </div>
+</div>
+
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
-  <form method="POST" action="{{ url_for('pharmacist.add_drug') }}" class="max-w-4xl mx-auto space-y-5" id="drugForm" novalidate>
+  <form method="POST" action="{{ url_for('pharmacist.add_drug') }}" class="max-w-4xl mx-auto space-y-5" id="drugForm" novalidate autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Basic info -->
@@ -29,37 +51,58 @@
         <span class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
           <i class="fas fa-info-circle"></i>
         </span>
-        <div>
+        <div class="min-w-0">
           <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Basic information</h2>
           <p class="text-[11px] text-gray-400">Identify the drug and how it's sold</p>
         </div>
       </div>
+
       <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
 
         <div class="md:col-span-2">
           <label for="name" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
             <i class="fas fa-pills text-primary text-[10px]"></i> Drug name <span class="text-rose-500">*</span>
           </label>
-          <input id="name" name="name" required placeholder="e.g. Paracetamol 500mg"
-            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
-                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          <div class="relative mt-1">
+            <input id="name" name="name" required placeholder="e.g. Paracetamol 500mg"
+              autocomplete="off"
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+            <div id="nameSuggest" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-40 max-h-64 overflow-y-auto"></div>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-1 inline-flex items-center gap-1">
+            <i class="fas fa-lightbulb text-amber-500"></i> Start typing for suggestions
+          </p>
         </div>
 
         <div>
           <label for="category" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
             <i class="fas fa-tag text-primary text-[10px]"></i> Category
           </label>
-          <select id="category" name="category"
-            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
-                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
-            <option value="">Select category</option>
-            <option>Antibiotic</option>
-            <option>Analgesic</option>
-            <option>Supplement</option>
-            <option>Respiratory</option>
-            <option>Diabetes</option>
-            <option>First aid</option>
-          </select>
+          <div class="flex gap-2 mt-1">
+            <select id="category" name="category"
+              class="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
+              <option value="">Select category</option>
+              <option>Antibiotic</option>
+              <option>Analgesic</option>
+              <option>Supplement</option>
+              <option>Respiratory</option>
+              <option>Diabetes</option>
+              <option>First aid</option>
+              <option>Antimalarial</option>
+              <option>Antihypertensive</option>
+              <option>Dermatology</option>
+            </select>
+            <button type="button" onclick="toggleNewCategory()"
+              class="flex-shrink-0 w-11 h-11 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-500 hover:text-primary transition flex items-center justify-center"
+              title="Add new category" aria-label="Add new category">
+              <i class="fas fa-plus text-sm"></i>
+            </button>
+          </div>
+          <input id="new_category" name="new_category" placeholder="Type new category name"
+            class="hidden w-full mt-2 px-4 py-2.5 border border-dashed border-primary/40 rounded-xl text-sm outline-none
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 bg-primary/5 placeholder-primary/60">
         </div>
 
         <div>
@@ -73,17 +116,21 @@
             <option>Tablet</option>
             <option>Capsule</option>
             <option>Syrup</option>
+            <option>Suspension</option>
             <option>Injection</option>
             <option>Ointment</option>
+            <option>Cream</option>
+            <option>Drops</option>
+            <option>Inhaler</option>
           </select>
         </div>
 
         <div>
           <label for="sku" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
-            <i class="fas fa-barcode text-primary text-[10px]"></i> SKU / Barcode <span class="text-rose-500">*</span>
+            <i class="fas fa-barcode text-primary text-[10px]"></i> SKU / Barcode
           </label>
           <div class="relative mt-1">
-            <input id="sku" name="sku" required placeholder="e.g. PCM-500-012"
+            <input id="sku" name="sku" placeholder="Scan or type, e.g. PCM-500-012"
               class="w-full px-4 pr-11 py-3 border border-gray-200 rounded-xl text-sm font-mono outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
             <button type="button" onclick="generateSku()"
@@ -92,7 +139,7 @@
               <i class="fas fa-wand-magic-sparkles text-sm"></i>
             </button>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1">Must be unique within your pharmacy.</p>
+          <p class="text-[11px] text-gray-400 mt-1">Must be unique within your pharmacy. A barcode scanner fills this instantly.</p>
         </div>
 
         <div>
@@ -112,11 +159,12 @@
         <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
           <i class="fas fa-coins"></i>
         </span>
-        <div>
+        <div class="min-w-0">
           <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Pricing</h2>
           <p class="text-[11px] text-gray-400">Set cost, selling price and tax</p>
         </div>
       </div>
+
       <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label for="cost_price" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
@@ -140,7 +188,14 @@
               class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
           </div>
-          <p id="marginHint" class="text-[11px] text-gray-400 mt-1">Margin will appear here</p>
+          <!-- Quick markup buttons -->
+          <div class="flex gap-1.5 mt-2">
+            <button type="button" onclick="applyMarkup(20)" class="markup-btn text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+20%</button>
+            <button type="button" onclick="applyMarkup(30)" class="markup-btn text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+30%</button>
+            <button type="button" onclick="applyMarkup(50)" class="markup-btn text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+50%</button>
+            <button type="button" onclick="applyMarkup(100)" class="markup-btn text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">×2</button>
+          </div>
+          <p id="marginHint" class="text-[11px] text-gray-400 mt-1.5" aria-live="polite">Margin will appear here</p>
         </div>
 
         <div>
@@ -153,6 +208,7 @@
                      focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
             <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium">%</span>
           </div>
+          <p class="text-[11px] text-gray-400 mt-1">Standard VAT in Ghana is 5%.</p>
         </div>
       </div>
     </section>
@@ -163,13 +219,13 @@
         <span class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
           <i class="fas fa-boxes-stacked"></i>
         </span>
-        <div>
+        <div class="min-w-0">
           <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Stock &amp; batch details</h2>
           <p class="text-[11px] text-gray-400">Initial quantity, expiry and supplier</p>
         </div>
       </div>
-      <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
 
+      <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label for="quantity" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
             <i class="fas fa-cubes text-primary text-[10px]"></i> Quantity in stock <span class="text-rose-500">*</span>
@@ -205,7 +261,14 @@
           <input id="expiry_date" name="expiry_date" type="date" required
             class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                    focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
-          <p id="expiryHint" class="text-[11px] mt-1 h-4"></p>
+          <!-- Quick picks -->
+          <div class="flex gap-1.5 mt-2 flex-wrap">
+            <button type="button" onclick="setExpiry(6)" class="exp-quick text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+6 mo</button>
+            <button type="button" onclick="setExpiry(12)" class="exp-quick text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+1 yr</button>
+            <button type="button" onclick="setExpiry(24)" class="exp-quick text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+2 yr</button>
+            <button type="button" onclick="setExpiry(36)" class="exp-quick text-[10px] font-semibold text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/10 px-2 py-1 rounded-md transition">+3 yr</button>
+          </div>
+          <p id="expiryHint" class="text-[11px] mt-1.5 h-4" aria-live="polite"></p>
         </div>
 
         <div class="md:col-span-2">
@@ -239,18 +302,26 @@
     </section>
 
     <!-- Actions -->
-    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pb-6 sticky bottom-0 sm:static bg-gray-100/80 backdrop-blur sm:bg-transparent pt-3 sm:pt-0 -mx-4 px-4 sm:mx-0 sm:px-0">
-      <a href="{{ url_for('pharmacist.inventory') }}"
-         class="w-full sm:w-auto text-center border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-semibold px-6 py-3 rounded-xl transition">
-        Cancel
-      </a>
-      <button type="submit" id="saveBtn"
-        class="btn-primary w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-8 py-3 rounded-xl shadow-md transition-all
-               inline-flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
-        <span id="saveBtnLabel" class="inline-flex items-center gap-2">
-          <i class="fas fa-save"></i> Save drug
-        </span>
-      </button>
+    <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pb-6 sticky bottom-0 sm:static bg-gray-100/90 backdrop-blur-md sm:bg-transparent pt-3 sm:pt-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+
+      <div class="hidden sm:flex items-center gap-2 text-[11px] text-gray-400">
+        <i class="fas fa-keyboard"></i>
+        <span><kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono text-[10px]">Ctrl</kbd> + <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono text-[10px]">S</kbd> to save</span>
+      </div>
+
+      <div class="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end w-full sm:w-auto">
+        <a href="{{ url_for('pharmacist.inventory') }}"
+           class="w-full sm:w-auto text-center border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-semibold px-6 py-3 rounded-xl transition">
+          Cancel
+        </a>
+        <button type="submit" id="saveBtn"
+          class="btn-primary w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-8 py-3 rounded-xl shadow-md transition-all
+                 inline-flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95">
+          <span id="saveBtnLabel" class="inline-flex items-center gap-2">
+            <i class="fas fa-save"></i> Save drug
+          </span>
+        </button>
+      </div>
     </div>
   </form>
 </main>
@@ -259,83 +330,357 @@
 
 {% block scripts %}
 <script>
+  /* ---------- Common Ghana pharmacy drugs for autocomplete ---------- */
+  var DRUG_DB = [
+    { name: 'Paracetamol 500mg', category: 'Analgesic', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Paracetamol Syrup 120mg/5ml', category: 'Analgesic', form: 'Syrup', pack: '60ml' },
+    { name: 'Ibuprofen 400mg', category: 'Analgesic', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Diclofenac 50mg', category: 'Analgesic', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Amoxicillin 500mg', category: 'Antibiotic', form: 'Capsule', pack: '21 capsules' },
+    { name: 'Amoxicillin Syrup 125mg/5ml', category: 'Antibiotic', form: 'Suspension', pack: '60ml' },
+    { name: 'Azithromycin 500mg', category: 'Antibiotic', form: 'Tablet', pack: '3 tablets' },
+    { name: 'Ciprofloxacin 500mg', category: 'Antibiotic', form: 'Tablet', pack: '10 tablets' },
+    { name: 'Metronidazole 400mg', category: 'Antibiotic', form: 'Tablet', pack: '21 tablets' },
+    { name: 'Cotrimoxazole 480mg', category: 'Antibiotic', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Artemether/Lumefantrine 20/120mg', category: 'Antimalarial', form: 'Tablet', pack: '6 tablets' },
+    { name: 'Artesunate 60mg', category: 'Antimalarial', form: 'Injection', pack: 'Vial' },
+    { name: 'Chloroquine 250mg', category: 'Antimalarial', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Metformin 500mg', category: 'Diabetes', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Glibenclamide 5mg', category: 'Diabetes', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Amlodipine 5mg', category: 'Antihypertensive', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Lisinopril 10mg', category: 'Antihypertensive', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Losartan 50mg', category: 'Antihypertensive', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Atenolol 50mg', category: 'Antihypertensive', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Salbutamol Inhaler 100mcg', category: 'Respiratory', form: 'Inhaler', pack: '200 doses' },
+    { name: 'Cetirizine 10mg', category: 'Antihistamine', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Loratadine 10mg', category: 'Antihistamine', form: 'Tablet', pack: '30 tablets' },
+    { name: 'Omeprazole 20mg', category: 'Gastro', form: 'Capsule', pack: '30 capsules' },
+    { name: 'Oral Rehydration Salts (ORS)', category: 'Supplement', form: 'Sachet', pack: '10 sachets' },
+    { name: 'Vitamin C 500mg', category: 'Supplement', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Ferrous Sulphate 200mg', category: 'Supplement', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Folic Acid 5mg', category: 'Supplement', form: 'Tablet', pack: '100 tablets' },
+    { name: 'Povidone Iodine 10%', category: 'First aid', form: 'Ointment', pack: '25g' },
+    { name: 'Gentian Violet', category: 'First aid', form: 'Ointment', pack: '25ml' },
+    { name: 'Hydrocortisone Cream 1%', category: 'Dermatology', form: 'Cream', pack: '15g' },
+    { name: 'Clotrimazole Cream 1%', category: 'Dermatology', form: 'Cream', pack: '20g' }
+  ];
+
+  /* ---------- Progress tracking ---------- */
+  var REQUIRED_IDS = ['name', 'selling_price', 'quantity', 'expiry_date'];
+
+  function updateProgress() {
+    var done = 0;
+    REQUIRED_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.value && String(el.value).trim() !== '') done++;
+    });
+    var txt = document.getElementById('progressText');
+    var bar = document.getElementById('progressBar');
+    var fill = document.getElementById('progressFill');
+    if (txt) txt.textContent = done + ' / 4';
+    if (bar) bar.setAttribute('aria-valuenow', String(done));
+    if (fill) {
+      var pct = (done / 4) * 100;
+      fill.style.width = pct + '%';
+      if (done === 4) {
+        fill.classList.remove('from-primary', 'to-primaryLight');
+        fill.classList.add('from-emerald-500', 'to-emerald-400');
+      } else {
+        fill.classList.add('from-primary', 'to-primaryLight');
+        fill.classList.remove('from-emerald-500', 'to-emerald-400');
+      }
+    }
+  }
+
+  /* ---------- Autocomplete ---------- */
   (function () {
-    // Live margin calculator
+    var input = document.getElementById('name');
+    var box = document.getElementById('nameSuggest');
+    if (!input || !box) return;
+    var activeIndex = -1;
+
+    function render(list, q) {
+      if (!q || q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; activeIndex = -1; return; }
+      var ql = q.toLowerCase();
+      var matches = DRUG_DB.filter(function (d) { return d.name.toLowerCase().indexOf(ql) !== -1; }).slice(0, 8);
+      if (!matches.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+      box.innerHTML = matches.map(function (m, i) {
+        return '<button type="button" data-idx="' + i + '" class="suggest-item w-full text-left px-3 py-2 hover:bg-primary/5 transition flex items-start gap-2 border-b border-gray-50 last:border-b-0">'
+          + '<span class="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas fa-pills text-[10px]"></i></span>'
+          + '<span class="min-w-0 flex-1">'
+          + '<span class="block text-xs font-semibold text-gray-800 truncate">' + m.name + '</span>'
+          + '<span class="block text-[10px] text-gray-400 truncate">' + m.category + ' · ' + m.form + (m.pack ? ' · ' + m.pack : '') + '</span>'
+          + '</span></button>';
+      }).join('');
+
+      box.classList.remove('hidden');
+      box.querySelectorAll('.suggest-item').forEach(function (btn, i) {
+        btn.addEventListener('click', function () {
+          var m = matches[i];
+          input.value = m.name;
+          var cat = document.getElementById('category');
+          var form = document.getElementById('dosage_form');
+          var pack = document.getElementById('pack_size');
+          if (cat) cat.value = m.category;
+          if (form) form.value = m.form;
+          if (pack && m.pack) pack.value = m.pack;
+          box.classList.add('hidden');
+          input.focus();
+          updateProgress();
+        });
+      });
+    }
+
+    input.addEventListener('input', function () { render(null, input.value); });
+    input.addEventListener('focus', function () { if (input.value) render(null, input.value); });
+
+    input.addEventListener('keydown', function (e) {
+      var items = box.querySelectorAll('.suggest-item');
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+      } else if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        items[activeIndex].click();
+        activeIndex = -1;
+        return;
+      } else if (e.key === 'Escape') {
+        box.classList.add('hidden');
+        activeIndex = -1;
+        return;
+      } else {
+        return;
+      }
+      items.forEach(function (b, i) {
+        b.classList.toggle('bg-primary/10', i === activeIndex);
+      });
+      if (items[activeIndex]) items[activeIndex].scrollIntoView({ block: 'nearest' });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!box.contains(e.target) && e.target !== input) box.classList.add('hidden');
+    });
+  })();
+
+  /* ---------- Category: inline new ---------- */
+  function toggleNewCategory() {
+    var el = document.getElementById('new_category');
+    if (!el) return;
+    var hidden = el.classList.contains('hidden');
+    if (hidden) {
+      el.classList.remove('hidden');
+      el.focus();
+    } else {
+      el.classList.add('hidden');
+      el.value = '';
+    }
+  }
+
+  /* ---------- Margin calculator ---------- */
+  (function () {
     var cost = document.getElementById('cost_price');
     var price = document.getElementById('selling_price');
     var hint = document.getElementById('marginHint');
 
-    function updateMargin() {
+    function update() {
       var c = parseFloat(cost.value) || 0;
       var p = parseFloat(price.value) || 0;
       if (!p || !c) {
         hint.textContent = 'Margin will appear here';
-        hint.className = 'text-[11px] text-gray-400 mt-1';
+        hint.className = 'text-[11px] text-gray-400 mt-1.5';
         return;
       }
       var margin = ((p - c) / p) * 100;
+      var profit = p - c;
       var tone = margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-rose-500';
-      hint.textContent = 'Margin: ' + margin.toFixed(1) + '% · Profit ' + (p - c).toFixed(2) + ' per unit';
-      hint.className = 'text-[11px] ' + tone + ' mt-1 font-medium';
+      hint.textContent = 'Margin ' + margin.toFixed(1) + '% · Profit GH₵ ' + profit.toFixed(2) + '/unit';
+      hint.className = 'text-[11px] ' + tone + ' mt-1.5 font-medium';
     }
     if (cost && price) {
-      cost.addEventListener('input', updateMargin);
-      price.addEventListener('input', updateMargin);
+      cost.addEventListener('input', update);
+      price.addEventListener('input', update);
     }
 
-    // Expiry hint
-    var expiry = document.getElementById('expiry_date');
-    var expiryHint = document.getElementById('expiryHint');
-    if (expiry) {
-      expiry.addEventListener('change', function () {
-        if (!this.value) { expiryHint.textContent = ''; return; }
-        var d = new Date(this.value);
-        var days = Math.ceil((d - new Date()) / 86400000);
-        if (days < 0) {
-          expiryHint.textContent = 'This date is in the past.';
-          expiryHint.className = 'text-[11px] mt-1 text-rose-500 font-medium';
-        } else if (days <= 30) {
-          expiryHint.textContent = 'Expires in ' + days + ' days — will trigger expiry alerts.';
-          expiryHint.className = 'text-[11px] mt-1 text-rose-500 font-medium';
-        } else if (days <= 90) {
-          expiryHint.textContent = 'Expires in ' + days + ' days.';
-          expiryHint.className = 'text-[11px] mt-1 text-amber-600 font-medium';
-        } else {
-          expiryHint.textContent = 'Expires in ' + days + ' days.';
-          expiryHint.className = 'text-[11px] mt-1 text-emerald-600 font-medium';
-        }
-      });
-    }
-
-    // Description counter
-    var desc = document.getElementById('description');
-    var descCount = document.getElementById('descCount');
-    if (desc && descCount) {
-      desc.addEventListener('input', function () { descCount.textContent = this.value.length; });
-    }
-
-    // Generate SKU
-    window.generateSku = function () {
-      var nameInput = document.getElementById('name');
-      var skuInput = document.getElementById('sku');
-      var base = (nameInput.value || 'DRG').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'DRG';
-      var rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-      var num = String(Math.floor(Math.random() * 900) + 100);
-      skuInput.value = base + '-' + num + '-' + rand;
-      skuInput.focus();
+    window.applyMarkup = function (pct) {
+      var c = parseFloat(cost.value) || 0;
+      if (!c) {
+        hint.textContent = 'Enter cost price first';
+        hint.className = 'text-[11px] text-rose-500 mt-1.5 font-medium';
+        return;
+      }
+      var p = c * (1 + pct / 100);
+      price.value = p.toFixed(2);
+      update();
+      updateProgress();
     };
+  })();
 
-    // Submit loading state
+  /* ---------- Expiry quick picks ---------- */
+  window.setExpiry = function (months) {
+    var el = document.getElementById('expiry_date');
+    if (!el) return;
+    var d = new Date();
+    d.setMonth(d.getMonth() + months);
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    el.value = yyyy + '-' + mm + '-' + dd;
+    el.dispatchEvent(new Event('change'));
+    updateProgress();
+  };
+
+  /* ---------- Expiry hint ---------- */
+  (function () {
+    var expiry = document.getElementById('expiry_date');
+    var hint = document.getElementById('expiryHint');
+    if (!expiry || !hint) return;
+    expiry.addEventListener('change', function () {
+      if (!this.value) { hint.textContent = ''; return; }
+      var d = new Date(this.value);
+      var days = Math.ceil((d - new Date()) / 86400000);
+      if (days < 0) {
+        hint.textContent = 'This date is in the past.';
+        hint.className = 'text-[11px] mt-1.5 text-rose-500 font-medium';
+      } else if (days <= 30) {
+        hint.textContent = 'Expires in ' + days + ' days — will trigger expiry alerts.';
+        hint.className = 'text-[11px] mt-1.5 text-rose-500 font-medium';
+      } else if (days <= 90) {
+        hint.textContent = 'Expires in ' + days + ' days.';
+        hint.className = 'text-[11px] mt-1.5 text-amber-600 font-medium';
+      } else {
+        var yrs = (days / 365).toFixed(1);
+        hint.textContent = 'Expires in ' + days + ' days (~' + yrs + ' yrs).';
+        hint.className = 'text-[11px] mt-1.5 text-emerald-600 font-medium';
+      }
+    });
+  })();
+
+  /* ---------- Description counter ---------- */
+  (function () {
+    var desc = document.getElementById('description');
+    var c = document.getElementById('descCount');
+    if (desc && c) desc.addEventListener('input', function () { c.textContent = this.value.length; });
+  })();
+
+  /* ---------- Generate SKU ---------- */
+  window.generateSku = function () {
+    var nameInput = document.getElementById('name');
+    var skuInput = document.getElementById('sku');
+    if (!skuInput) return;
+    var base = (nameInput.value || 'DRG').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'DRG';
+    var rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    var num = String(Math.floor(Math.random() * 900) + 100);
+    skuInput.value = base + '-' + num + '-' + rand;
+    skuInput.focus();
+  };
+
+  /* ---------- Reset ---------- */
+  window.resetForm = function () {
+    if (!confirm('Clear all entered data?')) return;
+    var form = document.getElementById('drugForm');
+    if (!form) return;
+    form.reset();
+    try { localStorage.removeItem('pharmacole_add_drug_draft'); } catch (e) {}
+    updateProgress();
+    var hint = document.getElementById('marginHint');
+    if (hint) { hint.textContent = 'Margin will appear here'; hint.className = 'text-[11px] text-gray-400 mt-1.5'; }
+    var eHint = document.getElementById('expiryHint');
+    if (eHint) eHint.textContent = '';
+    var dc = document.getElementById('descCount');
+    if (dc) dc.textContent = '0';
+  };
+
+  /* ---------- Progress wire-up ---------- */
+  (function () {
+    REQUIRED_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateProgress);
+      if (el) el.addEventListener('change', updateProgress);
+    });
+    updateProgress();
+  })();
+
+  /* ---------- Unsaved changes guard ---------- */
+  (function () {
+    var form = document.getElementById('drugForm');
+    var dirty = false;
+    function markDirty() { dirty = true; }
+    form.addEventListener('input', markDirty);
+    form.addEventListener('change', markDirty);
+    form.addEventListener('submit', function () { dirty = false; });
+    window.addEventListener('beforeunload', function (e) {
+      if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+  })();
+
+  /* ---------- Draft auto-save ---------- */
+  (function () {
+    var form = document.getElementById('drugForm');
+    if (!form) return;
+    var KEY = 'pharmacole_add_drug_draft';
+    var fields = ['name','category','dosage_form','sku','pack_size','cost_price','selling_price','tax_rate','quantity','min_threshold','batch_number','expiry_date','supplier','description'];
+
+    // Load
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        fields.forEach(function (f) {
+          var el = form.querySelector('[name="' + f + '"]');
+          if (el && data[f] != null) el.value = data[f];
+        });
+        if (data.__new_category) {
+          var nc = document.getElementById('new_category');
+          if (nc) { nc.value = data.__new_category; nc.classList.remove('hidden'); }
+        }
+        updateProgress();
+      }
+    } catch (e) {}
+
+    // Save
+    form.addEventListener('input', function () {
+      try {
+        var data = {};
+        fields.forEach(function (f) {
+          var el = form.querySelector('[name="' + f + '"]');
+          if (el) data[f] = el.value;
+        });
+        var nc = document.getElementById('new_category');
+        if (nc && nc.value) data.__new_category = nc.value;
+        localStorage.setItem(KEY, JSON.stringify(data));
+      } catch (e) {}
+    });
+
+    // Clear on successful submit
+    form.addEventListener('submit', function () {
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    });
+  })();
+
+  /* ---------- Submit loading + keyboard save ---------- */
+  (function () {
     var form = document.getElementById('drugForm');
     var btn = document.getElementById('saveBtn');
     var label = document.getElementById('saveBtnLabel');
-    if (form) {
-      form.addEventListener('submit', function (e) {
+    if (form && btn && label) {
+      form.addEventListener('submit', function () {
         if (!form.checkValidity()) return;
         btn.disabled = true;
         label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Saving drug…';
       });
     }
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (form) form.requestSubmit();
+      }
+    });
   })();
 </script>
 {% endblock %}

@@ -62,6 +62,14 @@
       <h1 class="text-2xl font-bold text-gray-800 mb-1">Sign in</h1>
       <p class="text-sm text-gray-500 mb-6">Access your pharmacy workspace.</p>
 
+      <!-- Inline error area -->
+      {% if form and form.get('error') %}
+      <div class="mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm p-3 flex items-start gap-2" role="alert">
+        <i class="fas fa-circle-exclamation mt-0.5 flex-shrink-0"></i>
+        <span>{{ form.get('error') }}</span>
+      </div>
+      {% endif %}
+
       <!-- Tab switcher -->
       <div class="relative flex bg-gray-100 rounded-xl p-1 mb-6 text-sm font-semibold" role="tablist" aria-label="Login type">
         <span id="tabIndicator"
@@ -78,7 +86,7 @@
         </button>
       </div>
 
-      <form method="POST" action="{{ url_for('auth.login') }}" class="space-y-4" novalidate id="loginForm">
+      <form method="POST" action="{{ url_for('auth.login') }}" class="space-y-4" novalidate id="loginForm" autocomplete="on">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="login_type" id="loginType" value="tenant">
 
@@ -91,7 +99,8 @@
             <i class="fas fa-store absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="tenant_code" name="tenant_code" placeholder="e.g. GH-4F8K2A"
               value="{{ form.get('tenant_code','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono tracking-wide outline-none transition
+              autocomplete="off" autocapitalize="characters" spellcheck="false"
+              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono tracking-wide uppercase outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
           </div>
         </div>
@@ -104,9 +113,11 @@
           <div class="relative mt-1">
             <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="login_email" name="email" type="email" required placeholder="you@greenhealth.com"
-              autocomplete="email" value="{{ form.get('email','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false"
+              value="{{ form.get('email','') }}"
+              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i id="emailTick" class="hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm"></i>
           </div>
         </div>
 
@@ -122,6 +133,7 @@
             <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="login_password" name="password" type="password" required placeholder="••••••••"
               autocomplete="current-password"
+              aria-describedby="capsHint"
               class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
             <button type="button"
@@ -131,23 +143,30 @@
               <i class="fas fa-eye text-sm"></i>
             </button>
           </div>
+          <p id="capsHint" class="hidden text-[11px] text-amber-600 mt-1.5 items-center gap-1">
+            <i class="fas fa-triangle-exclamation"></i> Caps lock is on
+          </p>
         </div>
 
         <!-- Remember me -->
         <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
-          <input type="checkbox" name="remember"
-            class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40">
-          Keep me signed in
+          <input type="checkbox" id="rememberMe" name="remember"
+            class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer">
+          Keep me signed in on this device
         </label>
 
         <!-- Submit -->
         <button type="submit" id="loginBtn"
           class="btn-primary w-full bg-primary hover:bg-primaryLight text-white font-bold py-3.5 rounded-xl shadow-md transition
-                 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99]">
           <span id="loginBtnLabel" class="inline-flex items-center gap-2">
             <i class="fas fa-sign-in-alt"></i> Sign in
           </span>
         </button>
+
+        <p class="text-[11px] text-gray-400 text-center hidden sm:block">
+          Press <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">Enter</kbd> to sign in
+        </p>
       </form>
 
       <p class="text-sm text-gray-500 text-center mt-6">
@@ -159,7 +178,7 @@
 </div>
 
 <script>
-  // Password visibility toggle
+  /* ---------- Password visibility toggle ---------- */
   function togglePwd(id, btn) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -175,7 +194,21 @@
     var indicator = document.getElementById('tabIndicator');
     var tenantField = document.getElementById('tenantField');
     var loginType = document.getElementById('loginType');
+    var form = document.getElementById('loginForm');
+    var btn = document.getElementById('loginBtn');
+    var label = document.getElementById('loginBtnLabel');
+    var emailInput = document.getElementById('login_email');
+    var emailTick = document.getElementById('emailTick');
+    var password = document.getElementById('login_password');
+    var capsHint = document.getElementById('capsHint');
+    var remember = document.getElementById('rememberMe');
+    var tenantInput = document.getElementById('tenant_code');
 
+    var TAB_KEY = 'pharmacole_login_tab';
+    var EMAIL_KEY = 'pharmacole_login_email';
+    var TENANT_KEY = 'pharmacole_login_tenant';
+
+    /* ---------- Tab switching ---------- */
     function activateTenant() {
       tabTenant.classList.add('text-primary');
       tabTenant.classList.remove('text-gray-500');
@@ -187,6 +220,8 @@
       tenantField.style.display = 'block';
       tenantField.classList.add('animate-fade-in');
       loginType.value = 'tenant';
+      try { localStorage.setItem(TAB_KEY, 'tenant'); } catch (e) {}
+      setTimeout(function () { if (tenantInput && !tenantInput.value) tenantInput.focus(); }, 50);
     }
 
     function activateSuper() {
@@ -199,21 +234,119 @@
       indicator.style.left = 'calc(50% + 0.125rem)';
       tenantField.style.display = 'none';
       loginType.value = 'super';
+      try { localStorage.setItem(TAB_KEY, 'super'); } catch (e) {}
+      setTimeout(function () { if (emailInput && !emailInput.value) emailInput.focus(); }, 50);
     }
 
     tabTenant.addEventListener('click', activateTenant);
     tabSuper.addEventListener('click', activateSuper);
 
-    // Loading state on submit
-    var form = document.getElementById('loginForm');
-    var btn = document.getElementById('loginBtn');
-    var label = document.getElementById('loginBtnLabel');
+    /* ---------- Restore last state ---------- */
+    try {
+      var lastTab = localStorage.getItem(TAB_KEY);
+      var urlParams = new URLSearchParams(window.location.search);
+      var forcedType = urlParams.get('type');
+      if (forcedType === 'super') {
+        activateSuper();
+      } else if (forcedType === 'tenant') {
+        activateTenant();
+      } else if (lastTab === 'super') {
+        activateSuper();
+      } else {
+        // Default: tenant tab already active from server render
+        loginType.value = 'tenant';
+      }
+    } catch (e) {}
+
+    /* ---------- Email persistence ---------- */
+    try {
+      if (emailInput && !emailInput.value) {
+        var savedEmail = localStorage.getItem(EMAIL_KEY);
+        if (savedEmail) emailInput.value = savedEmail;
+      }
+      if (tenantInput && !tenantInput.value) {
+        var savedTenant = localStorage.getItem(TENANT_KEY);
+        if (savedTenant) tenantInput.value = savedTenant;
+      }
+    } catch (e) {}
+
+    /* ---------- Email validation tick ---------- */
+    function validEmail(v) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v || '').trim());
+    }
+
+    if (emailInput && emailTick) {
+      emailInput.addEventListener('input', function () {
+        if (validEmail(emailInput.value)) {
+          emailTick.classList.remove('hidden');
+        } else {
+          emailTick.classList.add('hidden');
+        }
+      });
+    }
+
+    /* ---------- Caps lock hint ---------- */
+    function capsOn(e) {
+      return e.getModifierState && e.getModifierState('CapsLock');
+    }
+    if (password && capsHint) {
+      password.addEventListener('keydown', function (e) {
+        if (capsOn(e)) {
+          capsHint.classList.remove('hidden');
+          capsHint.classList.add('flex');
+        } else {
+          capsHint.classList.add('hidden');
+          capsHint.classList.remove('flex');
+        }
+      });
+      password.addEventListener('keyup', function (e) {
+        if (!capsOn(e)) {
+          capsHint.classList.add('hidden');
+          capsHint.classList.remove('flex');
+        }
+      });
+      password.addEventListener('blur', function () {
+        capsHint.classList.add('hidden');
+        capsHint.classList.remove('flex');
+      });
+    }
+
+    /* ---------- Submit ---------- */
     if (form) {
       form.addEventListener('submit', function () {
+        // Persist for next time
+        try {
+          if (emailInput && emailInput.value) localStorage.setItem(EMAIL_KEY, emailInput.value.trim());
+          if (tenantInput && tenantInput.value) localStorage.setItem(TENANT_KEY, tenantInput.value.trim().toUpperCase());
+        } catch (e) {}
+
         btn.disabled = true;
         label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing you in…';
       });
     }
+
+    /* ---------- Tenant code: auto-uppercase as user types ---------- */
+    if (tenantInput) {
+      tenantInput.addEventListener('input', function () {
+        var start = tenantInput.selectionStart;
+        var end = tenantInput.selectionEnd;
+        tenantInput.value = tenantInput.value.toUpperCase();
+        // Restore cursor position
+        try { tenantInput.setSelectionRange(start, end); } catch (e) {}
+      });
+    }
+
+    /* ---------- Auto-focus the right field ---------- */
+    setTimeout(function () {
+      var active = loginType.value;
+      if (active === 'super') {
+        if (emailInput && !emailInput.value) emailInput.focus();
+      } else {
+        // If tenant code and email are both empty, focus tenant
+        if (tenantInput && !tenantInput.value) tenantInput.focus();
+        else if (emailInput && !emailInput.value) emailInput.focus();
+      }
+    }, 150);
   })();
 </script>
 

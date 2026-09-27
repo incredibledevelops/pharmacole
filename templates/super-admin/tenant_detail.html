@@ -2,6 +2,10 @@
 {% block title %}{{ tenant.pharmacy_name }} · Super Admin{% endblock %}
 {% block body %}
 
+{% set status = tenant.subscription_status or 'expired' %}
+{% set expires = tenant.subscription_expires_at %}
+{% set days_left = (expires - now()).days if (expires and status == 'active') else 0 %}
+
 <header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
   <div class="flex items-center gap-3 min-w-0">
     <button onclick="openSASidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
@@ -14,23 +18,26 @@
     </a>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">{{ tenant.pharmacy_name }}</h1>
-      <p class="text-xs text-gray-400 truncate">{{ tenant.tenant_code }} · {{ tenant.owner_email }}</p>
+      <p class="text-xs text-gray-400 truncate">
+        <span class="font-mono">{{ tenant.tenant_code }}</span> · {{ tenant.owner_email }}
+      </p>
     </div>
   </div>
   <div class="flex gap-2 flex-shrink-0">
-    <form method="POST" action="{{ url_for('super_admin.activate_tenant', tenant_id=tenant._id) }}">
+    <form method="POST" action="{{ url_for('super_admin.activate_tenant', tenant_id=tenant._id) }}"
+      onsubmit="return confirm('Activate this tenant for 30 days?')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="days" value="30">
-      <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-1.5"
+      <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-1.5 active:scale-95"
         title="Activate for 30 days">
         <i class="fas fa-check"></i>
         <span class="hidden sm:inline">Activate 30d</span>
       </button>
     </form>
     <form method="POST" action="{{ url_for('super_admin.expire_tenant', tenant_id=tenant._id) }}"
-      onsubmit="return confirm('Mark this tenant expired?')">
+      onsubmit="return confirm('Mark this tenant as expired? This will lock their workspace.')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-1.5"
+      <button class="bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-1.5 active:scale-95"
         title="Expire tenant">
         <i class="fas fa-lock"></i>
         <span class="hidden sm:inline">Expire</span>
@@ -41,37 +48,101 @@
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 animate-fade-in">
 
+  <!-- Status banner (when not active or expiring soon) -->
+  {% if status == 'active' and days_left <= 7 and days_left > 0 %}
+  <div class="rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 bg-gradient-to-r from-amber-50 to-amber-100/40 border border-amber-200">
+    <div class="flex items-start gap-3 flex-1 min-w-0">
+      <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-hourglass-half"></i>
+      </span>
+      <div class="min-w-0">
+        <p class="font-bold text-gray-800 text-sm sm:text-base">Subscription expires in {{ days_left }} day{{ '' if days_left == 1 else 's' }}</p>
+        <p class="text-xs sm:text-sm text-gray-600 mt-0.5">Owner can renew from their subscription page before it locks.</p>
+      </div>
+    </div>
+    <span class="text-[11px] font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-full self-start sm:self-center">Expiring soon</span>
+  </div>
+  {% elif status != 'active' %}
+  <div class="rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 bg-gradient-to-r from-rose-50 to-rose-100/40 border border-rose-200">
+    <div class="flex items-start gap-3 flex-1 min-w-0">
+      <span class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-lock"></i>
+      </span>
+      <div class="min-w-0">
+        <p class="font-bold text-gray-800 text-sm sm:text-base">
+          {% if status == 'pending' %}Awaiting activation{% else %}Workspace locked{% endif %}
+        </p>
+        <p class="text-xs sm:text-sm text-gray-600 mt-0.5">
+          {% if status == 'pending' %}
+            Payment not yet confirmed. The owner should complete checkout.
+          {% else %}
+            Subscription has expired. Activate to unlock the workspace for the team.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <form method="POST" action="{{ url_for('super_admin.activate_tenant', tenant_id=tenant._id) }}"
+      onsubmit="return confirm('Activate this tenant for 30 days?')"
+      class="self-start sm:self-center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="days" value="30">
+      <button class="bg-primary hover:bg-primaryLight text-white text-sm font-bold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95 inline-flex items-center gap-2">
+        <i class="fas fa-bolt"></i> Activate now
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
   <!-- Stats strip -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Status</p>
-      <p class="mt-2">
-        <span class="text-xs px-2.5 py-1 rounded-full font-bold inline-flex items-center gap-1.5
-          {% if tenant.subscription_status == 'active' %}bg-emerald-100 text-emerald-700
-          {% elif tenant.subscription_status == 'pending' %}bg-amber-100 text-amber-700
-          {% else %}bg-rose-100 text-rose-700{% endif %}">
-          {% if tenant.subscription_status == 'active' %}
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
-          {% elif tenant.subscription_status == 'pending' %}
-            <i class="fas fa-clock text-[9px]"></i> Pending
-          {% else %}
-            <i class="fas fa-lock text-[9px]"></i> Expired
-          {% endif %}
-        </span>
-      </p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Status</p>
+        <p class="mt-2">
+          <span class="text-xs px-2.5 py-1 rounded-full font-bold inline-flex items-center gap-1.5
+            {% if status == 'active' %}bg-emerald-100 text-emerald-700
+            {% elif status == 'pending' %}bg-amber-100 text-amber-700
+            {% else %}bg-rose-100 text-rose-700{% endif %}">
+            {% if status == 'active' %}
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+            {% elif status == 'pending' %}
+              <i class="fas fa-clock text-[9px]"></i> Pending
+            {% else %}
+              <i class="fas fa-lock text-[9px]"></i> Expired
+            {% endif %}
+          </span>
+        </p>
+      </div>
     </div>
-    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Plan amount</p>
-      <p class="text-lg sm:text-xl font-extrabold text-gray-800 mt-1">{{ tenant.subscription_amount|ghs }}</p>
-      <p class="text-[11px] text-gray-400">per month</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-purple-400 to-violet-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Plan amount</p>
+        <p class="text-lg sm:text-xl font-extrabold text-gray-800 mt-1 truncate">{{ tenant.subscription_amount|ghs }}</p>
+        <p class="text-[11px] text-gray-400">per month</p>
+      </div>
     </div>
-    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Started</p>
-      <p class="text-sm sm:text-base font-bold text-gray-800 mt-1">{{ tenant.subscription_started_at|nice_date }}</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Started</p>
+        <p class="text-sm sm:text-base font-bold text-gray-800 mt-1">{{ tenant.subscription_started_at|nice_date }}</p>
+      </div>
     </div>
-    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Expires</p>
-      <p class="text-sm sm:text-base font-bold text-gray-800 mt-1">{{ tenant.subscription_expires_at|nice_date }}</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Expires</p>
+        <p class="text-sm sm:text-base font-bold text-gray-800 mt-1">{{ tenant.subscription_expires_at|nice_date }}</p>
+        {% if status == 'active' and days_left > 0 %}
+          <p class="text-[11px] text-gray-400 mt-0.5">{{ days_left }} day{{ '' if days_left == 1 else 's' }} left</p>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -81,38 +152,93 @@
       <span class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
         <i class="fas fa-building"></i>
       </span>
-      <div>
+      <div class="min-w-0">
         <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Pharmacy details</h2>
         <p class="text-[11px] text-gray-400">Owner contact and address</p>
       </div>
     </div>
     <div class="p-5 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+
       <div>
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Owner</p>
         <p class="font-medium text-gray-800 mt-1 truncate">{{ tenant.owner_name or '—' }}</p>
       </div>
+
       <div>
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Email</p>
-        <p class="font-medium text-gray-800 mt-1 truncate text-sm">{{ tenant.owner_email or '—' }}</p>
+        {% if tenant.owner_email %}
+          <div class="flex items-center gap-1 group/email mt-1">
+            <a href="mailto:{{ tenant.owner_email }}"
+               class="font-medium text-gray-800 hover:text-primary truncate text-sm transition">
+              {{ tenant.owner_email }}
+            </a>
+            <button type="button"
+              class="copy-btn opacity-0 group-hover/email:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition flex-shrink-0"
+              data-copy="{{ tenant.owner_email|e }}" title="Copy email" aria-label="Copy email">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+          </div>
+        {% else %}
+          <p class="font-medium text-gray-800 mt-1">—</p>
+        {% endif %}
       </div>
+
       <div>
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Phone</p>
-        <p class="font-medium text-gray-800 mt-1">{{ tenant.owner_phone or '—' }}</p>
+        {% if tenant.owner_phone %}
+          <div class="flex items-center gap-1 group/phone mt-1">
+            <a href="tel:{{ tenant.owner_phone }}"
+               class="font-medium text-gray-800 hover:text-primary truncate transition">
+              {{ tenant.owner_phone }}
+            </a>
+            <button type="button"
+              class="copy-btn opacity-0 group-hover/phone:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition flex-shrink-0"
+              data-copy="{{ tenant.owner_phone|e }}" title="Copy phone" aria-label="Copy phone">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+          </div>
+        {% else %}
+          <p class="font-medium text-gray-800 mt-1">—</p>
+        {% endif %}
       </div>
+
       <div>
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Tenant code</p>
-        <p class="font-medium text-gray-800 mt-1 font-mono">{{ tenant.tenant_code }}</p>
+        <div class="flex items-center gap-1 group/tc mt-1">
+          <p class="font-medium text-gray-800 font-mono">{{ tenant.tenant_code }}</p>
+          <button type="button"
+            class="copy-btn opacity-0 group-hover/tc:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+            data-copy="{{ tenant.tenant_code|e }}" title="Copy tenant code" aria-label="Copy tenant code">
+            <i class="fas fa-copy text-[10px]"></i>
+          </button>
+        </div>
       </div>
+
       <div class="col-span-2 md:col-span-4">
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Address</p>
-        <p class="font-medium text-gray-800 mt-1">{{ tenant.address or '—' }}</p>
+        {% if tenant.address %}
+          <div class="flex items-start gap-1 group/addr mt-1">
+            <p class="font-medium text-gray-800 flex-1">{{ tenant.address }}</p>
+            <button type="button"
+              class="copy-btn opacity-0 group-hover/addr:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition flex-shrink-0"
+              data-copy="{{ tenant.address|e }}" title="Copy address" aria-label="Copy address">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+          </div>
+        {% else %}
+          <p class="font-medium text-gray-800 mt-1">—</p>
+        {% endif %}
       </div>
     </div>
   </div>
 
   <!-- Users -->
+  {% set owners_count = users|selectattr('role','equalto','owner')|list|length %}
+  {% set pharmacists_count = users|selectattr('role','equalto','pharmacist')|list|length %}
+  {% set cashiers_count = users|selectattr('role','equalto','cashier')|list|length %}
+
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3 bg-gradient-to-r from-blue-50/60 to-white">
+    <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50/60 to-white">
       <div class="flex items-center gap-3 min-w-0">
         <span class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
           <i class="fas fa-users"></i>
@@ -122,11 +248,29 @@
           <p class="text-[11px] text-gray-400">Owner, pharmacists, and cashiers</p>
         </div>
       </div>
-      <span class="text-[11px] font-bold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full">{{ users|length }}</span>
+      <span class="text-[11px] font-bold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full self-start">{{ users|length }}</span>
     </div>
+
+    {% if users %}
+    <!-- User role chips -->
+    <div class="px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto bg-gray-50/40">
+      <span class="text-[10px] font-semibold text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full whitespace-nowrap">
+        <i class="fas fa-user-tie text-[9px] mr-1"></i> Owner {{ owners_count }}
+      </span>
+      <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full whitespace-nowrap">
+        <i class="fas fa-pills text-[9px] mr-1"></i> Pharmacists {{ pharmacists_count }}
+      </span>
+      <span class="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full whitespace-nowrap">
+        <i class="fas fa-cash-register text-[9px] mr-1"></i> Cashiers {{ cashiers_count }}
+      </span>
+    </div>
+    {% endif %}
+
     <div class="divide-y divide-gray-100">
       {% for u in users %}
-      <div class="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/70 transition">
+      <div class="user-row px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/70 transition"
+        data-role="{{ u.role }}"
+        data-search="{{ ((u.full_name or '') ~ ' ' ~ (u.email or ''))|lower|e }}">
         <div class="flex items-center gap-3 min-w-0">
           <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
             {{ (u.full_name or 'U')[:2]|upper }}
@@ -145,17 +289,24 @@
         </span>
       </div>
       {% else %}
-      <div class="p-10 text-center text-gray-400">
+      <div class="p-10 text-center text-gray-400" role="status">
         <i class="fas fa-users text-2xl mb-2 block text-gray-300"></i>
-        <p class="text-sm">No users yet.</p>
+        <p class="text-sm font-medium text-gray-500">No users yet</p>
+        <p class="text-xs mt-1">Team members will show up here.</p>
       </div>
       {% endfor %}
     </div>
   </div>
 
   <!-- Payments -->
+  {% set success_pay = payments|selectattr('status','equalto','success')|list %}
+  {% set pending_pay = payments|selectattr('status','equalto','pending')|list %}
+  {% set success_amounts = [] %}
+  {% for p in payments %}{% if p.status == 'success' %}{% set _ = success_amounts.append(p.amount) %}{% endif %}{% endfor %}
+  {% set total_collected = success_amounts|sum %}
+
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/60 to-white">
+    <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/60 to-white">
       <div class="flex items-center gap-3 min-w-0">
         <span class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
           <i class="fas fa-receipt"></i>
@@ -165,13 +316,50 @@
           <p class="text-[11px] text-gray-400">Subscription transactions</p>
         </div>
       </div>
-      <span class="text-[11px] font-bold text-emerald-600 bg-emerald-100 px-2.5 py-1 rounded-full">{{ payments|length }}</span>
+      <span class="text-[11px] font-bold text-emerald-600 bg-emerald-100 px-2.5 py-1 rounded-full self-start">{{ payments|length }}</span>
     </div>
+
+    {% if payments %}
+    <!-- Payment stats -->
+    <div class="px-5 py-3 border-b border-gray-100 grid grid-cols-3 gap-2 bg-gray-50/40">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+        <div class="min-w-0">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Success</p>
+          <p class="text-xs font-bold text-emerald-600">{{ success_pay|length }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"></span>
+        <div class="min-w-0">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Pending</p>
+          <p class="text-xs font-bold text-amber-600">{{ pending_pay|length }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0"></span>
+        <div class="min-w-0">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Collected</p>
+          <p class="text-xs font-bold text-primary truncate">{{ total_collected|ghs }}</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="divide-y divide-gray-100">
       {% for p in payments %}
-      <div class="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/70 transition">
+      <div class="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/70 transition group">
         <div class="min-w-0 flex-1">
-          <p class="text-xs font-mono text-gray-700 truncate">{{ p.paystack_reference or '—' }}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-xs font-mono text-gray-700 truncate">{{ p.paystack_reference or '—' }}</p>
+            {% if p.paystack_reference %}
+            <button type="button"
+              class="copy-btn opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition flex-shrink-0"
+              data-copy="{{ p.paystack_reference|e }}" title="Copy reference" aria-label="Copy reference">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+            {% endif %}
+          </div>
           <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1">
             <i class="fas fa-calendar-day text-[9px]"></i>
             {{ p.paid_at|nice_date if p.paid_at else p.created_at|nice_date }}
@@ -179,21 +367,91 @@
         </div>
         <div class="flex items-center gap-3 flex-shrink-0">
           <span class="font-bold text-gray-800 whitespace-nowrap">{{ p.amount|ghs }}</span>
-          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
             {% if p.status == 'success' %}bg-emerald-100 text-emerald-700
             {% elif p.status == 'pending' %}bg-amber-100 text-amber-700
             {% else %}bg-rose-100 text-rose-700{% endif %}">
-            {{ p.status }}
+            {% if p.status == 'success' %}
+              <i class="fas fa-check text-[9px]"></i> Success
+            {% elif p.status == 'pending' %}
+              <i class="fas fa-clock text-[9px]"></i> Pending
+            {% else %}
+              <i class="fas fa-xmark text-[9px]"></i> {{ p.status|capitalize }}
+            {% endif %}
           </span>
         </div>
       </div>
       {% else %}
-      <div class="p-10 text-center text-gray-400">
+      <div class="p-10 text-center text-gray-400" role="status">
         <i class="fas fa-receipt text-2xl mb-2 block text-gray-300"></i>
-        <p class="text-sm">No payments yet.</p>
+        <p class="text-sm font-medium text-gray-500">No payments yet</p>
+        <p class="text-xs mt-1">Subscription payments will appear here.</p>
       </div>
       {% endfor %}
     </div>
   </div>
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+
+      function done() { showToast('Copied'); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
+  })();
+</script>
 {% endblock %}

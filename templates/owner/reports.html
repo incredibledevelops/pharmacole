@@ -9,12 +9,14 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Sales &amp; Reports</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">Full transaction history · exportable to CSV</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        Full transaction history · <span id="hdrCount" aria-live="polite">{{ sales|length }}</span> record{{ '' if sales|length == 1 else 's' }}
+      </p>
     </div>
   </div>
   <div class="flex gap-2 flex-shrink-0">
-    <a href="{{ url_for('owner.export_csv') }}"
-       class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2">
+    <a href="{{ url_for('owner.export_csv') }}" id="exportCsvBtn"
+       class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 active:scale-95">
       <i class="fas fa-file-csv"></i>
       <span class="hidden sm:inline">Export CSV</span>
     </a>
@@ -26,19 +28,38 @@
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
-  <!-- Summary -->
+  {% if sales %}
+
+  <!-- Date range chips -->
+  <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 mb-4" role="tablist" aria-label="Date range">
+    <button data-range="today" class="range-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+      <i class="fas fa-calendar-day mr-1 text-[10px]"></i> Today
+    </button>
+    <button data-range="7" class="range-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+      <i class="fas fa-calendar-week mr-1 text-[10px]"></i> Last 7 days
+    </button>
+    <button data-range="30" class="range-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+      <i class="fas fa-calendar mr-1 text-[10px]"></i> Last 30 days
+    </button>
+    <button data-range="all" class="range-chip active bg-primary text-white text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+      <i class="fas fa-infinity mr-1 text-[10px]"></i> All time
+    </button>
+  </div>
+
+  <!-- Summary (live-filtered) -->
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-5 md:mb-6">
     <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
         <div class="flex items-center justify-between mb-2">
-          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total revenue</p>
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Revenue</p>
           <i class="fas fa-coins text-primary"></i>
         </div>
-        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.revenue|ghs }}</p>
-        <p class="text-xs text-gray-400 mt-1">From {{ summary.transactions }} transactions</p>
+        <p id="statRevenue" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.revenue|ghs }}</p>
+        <p id="statRevenueSub" class="text-xs text-gray-400 mt-1">From {{ summary.transactions }} transactions</p>
       </div>
     </div>
+
     <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
@@ -46,10 +67,11 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Average sale</p>
           <i class="fas fa-chart-simple text-blue-500"></i>
         </div>
-        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.average|ghs }}</p>
+        <p id="statAverage" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.average|ghs }}</p>
         <p class="text-xs text-gray-400 mt-1">Per transaction</p>
       </div>
     </div>
+
     <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-purple-400 to-violet-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
@@ -57,26 +79,71 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Transactions</p>
           <i class="fas fa-receipt text-purple-500"></i>
         </div>
-        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800">{{ summary.transactions }}</p>
-        <p class="text-xs text-gray-400 mt-1">All-time count</p>
+        <p id="statCount" class="text-2xl sm:text-3xl font-extrabold text-gray-800">{{ summary.transactions }}</p>
+        <p id="statCountSub" class="text-xs text-gray-400 mt-1">All-time count</p>
       </div>
     </div>
   </div>
 
-  <!-- Filters -->
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 md:mb-6 flex flex-col sm:flex-row gap-3">
-    <div class="relative flex-1">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="reportSearch" placeholder="Search receipt, cashier, or method..."
-        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+  <!-- Payment method breakdown (clickable) -->
+  <div class="grid grid-cols-3 gap-3 mb-5">
+    <button type="button" data-method-chip="cash"
+      class="method-chip bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-emerald-300 hover:shadow-md transition-all flex items-center gap-3 text-left">
+      <span class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-money-bill-wave"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Cash</p>
+        <p class="text-sm font-bold text-gray-800 truncate" data-method-total="cash">{{ summary.revenue|ghs }}</p>
+      </div>
+    </button>
+
+    <button type="button" data-method-chip="card"
+      class="method-chip bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-3 text-left">
+      <span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-credit-card"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Card</p>
+        <p class="text-sm font-bold text-gray-800 truncate" data-method-total="card">—</p>
+      </div>
+    </button>
+
+    <button type="button" data-method-chip="momo"
+      class="method-chip bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-purple-300 hover:shadow-md transition-all flex items-center gap-3 text-left">
+      <span class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-mobile-alt"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">MoMo</p>
+        <p class="text-sm font-bold text-gray-800 truncate" data-method-total="momo">—</p>
+      </div>
+    </button>
+  </div>
+
+  <!-- Toolbar: search + filter -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row gap-3">
+      <div class="relative flex-1">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+        <input type="text" id="reportSearch" placeholder="Search receipt, cashier, or method… (press /)"
+          autocomplete="off" aria-label="Search sales"
+          class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+        <button type="button" id="reportSearchClear"
+          class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+          aria-label="Clear search">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <select id="paymentFilter" aria-label="Filter by payment method"
+        class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+        <option value="">All payment methods</option>
+        <option value="cash">Cash</option>
+        <option value="card">Card</option>
+        <option value="momo">Mobile Money</option>
+      </select>
     </div>
-    <select id="paymentFilter"
-      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
-      <option value="">All payment methods</option>
-      <option value="cash">Cash</option>
-      <option value="card">Card</option>
-      <option value="momo">Mobile Money</option>
-    </select>
   </div>
 
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -93,10 +160,23 @@
             <th class="px-5 py-3 text-right font-semibold">Total</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100" id="reportTableBody">
           {% for s in sales %}
-          <tr class="report-row hover:bg-gray-50/70 transition" data-method="{{ s.payment_method }}">
-            <td class="px-5 py-3.5 font-semibold text-gray-800 whitespace-nowrap font-mono text-xs">{{ s.receipt_no }}</td>
+          <tr class="report-row hover:bg-gray-50/70 transition"
+              data-method="{{ s.payment_method }}"
+              data-ts="{{ s.timestamp.isoformat() if s.timestamp else '' }}"
+              data-total="{{ s.total_amount }}"
+              data-search="{{ ((s.receipt_no or '') ~ ' ' ~ (s.cashier_name or '') ~ ' ' ~ s.payment_method)|lower|e }}">
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-1.5 group/rcpt">
+                <span class="font-semibold text-gray-800 whitespace-nowrap font-mono text-xs">{{ s.receipt_no }}</span>
+                <button type="button"
+                  class="copy-receipt-btn opacity-0 group-hover/rcpt:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                  data-receipt="{{ s.receipt_no|e }}" title="Copy receipt" aria-label="Copy receipt number">
+                  <i class="fas fa-copy text-[10px]"></i>
+                </button>
+              </div>
+            </td>
             <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap">{{ s.timestamp|nice_datetime }}</td>
             <td class="px-5 py-3.5 text-gray-600 truncate max-w-[150px]">{{ s.cashier_name }}</td>
             <td class="px-5 py-3.5 text-gray-600">{{ s.items|length }}</td>
@@ -133,17 +213,30 @@
     </div>
 
     <!-- Mobile list -->
-    <div class="md:hidden divide-y divide-gray-100">
+    <div class="md:hidden divide-y divide-gray-100" id="reportMobileList">
       {% for s in sales %}
-      <div class="report-row p-4" data-method="{{ s.payment_method }}">
+      <div class="report-row p-4"
+          data-method="{{ s.payment_method }}"
+          data-ts="{{ s.timestamp.isoformat() if s.timestamp else '' }}"
+          data-total="{{ s.total_amount }}"
+          data-search="{{ ((s.receipt_no or '') ~ ' ' ~ (s.cashier_name or '') ~ ' ' ~ s.payment_method)|lower|e }}">
+
         <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="min-w-0">
-            <p class="font-semibold text-gray-800 truncate font-mono text-xs">{{ s.receipt_no }}</p>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <p class="font-semibold text-gray-800 truncate font-mono text-xs">{{ s.receipt_no }}</p>
+              <button type="button"
+                class="copy-receipt-btn text-gray-400 hover:text-primary p-1 rounded transition"
+                data-receipt="{{ s.receipt_no|e }}" title="Copy receipt" aria-label="Copy receipt number">
+                <i class="fas fa-copy text-[10px]"></i>
+              </button>
+            </div>
             <p class="text-xs text-gray-400 mt-0.5">{{ s.timestamp|nice_datetime }}</p>
           </div>
           <p class="font-bold text-primary whitespace-nowrap">{{ s.total_amount|ghs }}</p>
         </div>
-        <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+
+        <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap mb-2">
           <span><i class="fas fa-user mr-1 text-gray-400"></i>{{ s.cashier_name }}</span>
           <span class="text-gray-300">·</span>
           <span>{{ s.items|length }} items</span>
@@ -156,6 +249,23 @@
             <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">MoMo</span>
           {% endif %}
         </div>
+
+        {% if s.items %}
+        <details class="group text-xs">
+          <summary class="cursor-pointer text-primary font-semibold inline-flex items-center gap-1.5 list-none select-none">
+            <i class="fas fa-chevron-down group-open:rotate-180 transition text-[10px]"></i>
+            View items
+          </summary>
+          <ul class="mt-2 pt-2 border-t border-dashed border-gray-200 space-y-1 text-gray-600">
+            {% for item in s.items %}
+            <li class="flex items-center justify-between gap-2">
+              <span class="truncate">{{ item.name }}</span>
+              <span class="text-gray-400 whitespace-nowrap">×{{ item.quantity }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
       </div>
       {% else %}
       <div class="p-10 text-center text-gray-400">
@@ -164,37 +274,291 @@
       </div>
       {% endfor %}
     </div>
+
+    <!-- No results -->
+    <div id="reportNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+      <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-search text-2xl text-gray-300"></i>
+      </div>
+      <p class="font-medium text-gray-500">No transactions match your filters</p>
+      <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+      <button type="button" onclick="clearAllReportFilters()"
+        class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+        <i class="fas fa-rotate-left text-xs"></i> Clear filters
+      </button>
+    </div>
   </div>
 
-  <div id="reportNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No transactions match your filters.</p>
+  {% else %}
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-receipt text-3xl text-primary"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">No sales recorded yet</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Transactions will appear here once your team starts selling at the POS.</p>
   </div>
+
+  {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- State ---------- */
+  var activeRange = 'all';
+  var activeMethod = '';
+
+  /* ---------- Utils ---------- */
+  function parseGHS(str) {
+    if (!str) return 0;
+    var m = String(str).replace(/[^\d.\-]/g, '');
+    return parseFloat(m) || 0;
+  }
+  function formatGHS(n) {
+    return 'GH₵ ' + (n || 0).toFixed(2);
+  }
+  function pluralize(n, singular, plural) {
+    return n + ' ' + (n === 1 ? singular : (plural || singular + 's'));
+  }
+
+  /* ---------- Filtering + live summary ---------- */
+  function applyReportFilters() {
+    var search = document.getElementById('reportSearch');
+    var noResults = document.getElementById('reportNoResults');
+    var hdrCount = document.getElementById('hdrCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+
+    var visible = 0;
+    var total = 0;
+    var revenue = 0;
+    var methodTotals = { cash: 0, card: 0, momo: 0 };
+    var now = new Date();
+
+    document.querySelectorAll('.report-row').forEach(function (row) {
+      total++;
+
+      var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var mm = !activeMethod || row.dataset.method === activeMethod;
+
+      // Date range filter
+      var mr = true;
+      if (activeRange !== 'all') {
+        var ts = row.dataset.ts;
+        if (ts) {
+          var d = new Date(ts);
+          if (!isNaN(d.getTime())) {
+            var diffDays = (now - d) / 86400000;
+            if (activeRange === 'today') mr = d.toDateString() === now.toDateString();
+            else if (activeRange === '7') mr = diffDays <= 7;
+            else if (activeRange === '30') mr = diffDays <= 30;
+          }
+        }
+      }
+
+      var show = ms && mm && mr;
+      row.style.display = show ? '' : 'none';
+      if (show) {
+        visible++;
+        revenue += parseFloat(row.dataset.total) || 0;
+        var m = row.dataset.method;
+        if (methodTotals[m] !== undefined) methodTotals[m] += parseFloat(row.dataset.total) || 0;
+      }
+    });
+
+    // Update summary cards (live)
+    var statRevenue = document.getElementById('statRevenue');
+    var statRevenueSub = document.getElementById('statRevenueSub');
+    var statAverage = document.getElementById('statAverage');
+    var statCount = document.getElementById('statCount');
+    var statCountSub = document.getElementById('statCountSub');
+
+    if (statRevenue) statRevenue.textContent = formatGHS(revenue);
+    if (statRevenueSub) statRevenueSub.textContent = 'From ' + pluralize(visible, 'transaction');
+    if (statAverage) statAverage.textContent = formatGHS(visible > 0 ? revenue / visible : 0);
+    if (statCount) statCount.textContent = visible;
+    if (statCountSub) statCountSub.textContent = (visible === total) ? 'All-time count' : 'of ' + total + ' shown';
+    if (hdrCount) hdrCount.textContent = visible;
+
+    // Method tiles
+    Object.keys(methodTotals).forEach(function (k) {
+      var el = document.querySelector('[data-method-total="' + k + '"]');
+      if (el) el.textContent = methodTotals[k] > 0 ? formatGHS(methodTotals[k]) : '—';
+    });
+
+    // Toggle no-results
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+
+    // Update export CSV link (best-effort; harmless if backend ignores params)
+    var exportBtn = document.getElementById('exportCsvBtn');
+    if (exportBtn) {
+      var url = new URL(exportBtn.href, window.location.origin);
+      if (q) url.searchParams.set('q', q);
+      else url.searchParams.delete('q');
+      if (activeMethod) url.searchParams.set('method', activeMethod);
+      else url.searchParams.delete('method');
+      if (activeRange !== 'all') url.searchParams.set('range', activeRange);
+      else url.searchParams.delete('range');
+      exportBtn.href = url.pathname + (url.search || '');
+    }
+  }
+
+  function clearAllReportFilters() {
+    activeRange = 'all';
+    activeMethod = '';
+    var search = document.getElementById('reportSearch');
+    if (search) search.value = '';
+    var clearBtn = document.getElementById('reportSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sel = document.getElementById('paymentFilter');
+    if (sel) sel.value = '';
+
+    document.querySelectorAll('.range-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allRange = document.querySelector('.range-chip[data-range="all"]');
+    if (allRange) {
+      allRange.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allRange.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+
+    document.querySelectorAll('.method-chip').forEach(function (c) {
+      c.classList.remove('border-primary', 'ring-2', 'ring-primary/20');
+    });
+
+    applyReportFilters();
+  }
+
+  /* ---------- Wire up ---------- */
   (function () {
     var search = document.getElementById('reportSearch');
+    var searchClear = document.getElementById('reportSearchClear');
     var payment = document.getElementById('paymentFilter');
-    var noResults = document.getElementById('reportNoResults');
 
-    function filter() {
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var m = payment ? payment.value : '';
-      var visible = 0;
-      document.querySelectorAll('.report-row').forEach(function (row) {
-        var ms = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
-        var mp = !m || row.dataset.method === m;
-        var show = ms && mp;
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
+    if (search) {
+      search.addEventListener('input', function () {
+        if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+        applyReportFilters();
       });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
     }
-    if (search) search.addEventListener('input', filter);
-    if (payment) payment.addEventListener('change', filter);
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyReportFilters();
+      });
+    }
+    if (payment) {
+      payment.addEventListener('change', function () {
+        activeMethod = payment.value;
+        applyReportFilters();
+      });
+    }
+
+    // Range chips
+    document.querySelectorAll('.range-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.range-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeRange = chip.dataset.range;
+        applyReportFilters();
+      });
+    });
+
+    // Method breakdown tiles → toggle method filter
+    document.querySelectorAll('.method-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var m = chip.dataset.methodChip;
+        if (activeMethod === m) {
+          activeMethod = '';
+          chip.classList.remove('border-primary', 'ring-2', 'ring-primary/20');
+        } else {
+          activeMethod = m;
+          document.querySelectorAll('.method-chip').forEach(function (c) {
+            c.classList.remove('border-primary', 'ring-2', 'ring-primary/20');
+          });
+          chip.classList.add('border-primary', 'ring-2', 'ring-primary/20');
+        }
+        if (payment) payment.value = activeMethod;
+        applyReportFilters();
+      });
+    });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+
+    // Initial calculation (so tiles/totals reflect current view)
+    applyReportFilters();
+  })();
+
+  /* ---------- Copy receipt + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-receipt-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var rcpt = btn.dataset.receipt || '';
+      if (!rcpt) return;
+
+      function done() { showToast('Receipt copied: ' + rcpt); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(rcpt).then(done).catch(function () {
+          fallbackCopy(rcpt); done();
+        });
+      } else {
+        fallbackCopy(rcpt); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

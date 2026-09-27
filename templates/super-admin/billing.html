@@ -9,7 +9,10 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Billing</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">All payments across tenants</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        All payments across tenants ·
+        <span id="hdrCount" aria-live="polite">{{ payments|length }}</span> on this page
+      </p>
     </div>
   </div>
 </header>
@@ -17,44 +20,113 @@
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
   {% if payments %}
-  <!-- Summary -->
+
+  <!-- Stats strip -->
   {% set success_count = payments|selectattr('status','equalto','success')|list|length %}
   {% set pending_count = payments|selectattr('status','equalto','pending')|list|length %}
   {% set failed_count = payments|length - success_count - pending_count %}
 
-  <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
-    <div class="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 shadow-sm border border-emerald-100/60">
-      <p class="text-[11px] text-emerald-600 uppercase tracking-wide font-semibold">Success</p>
-      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ success_count }}</p>
+  {% set success_amounts = [] %}
+  {% for p in payments %}{% if p.status == 'success' %}{% set _ = success_amounts.append(p.amount) %}{% endif %}{% endfor %}
+  {% set total_collected = success_amounts|sum %}
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Success</p>
+          <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ success_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Completed</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
-      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">Pending</p>
-      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending_count }}</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Pending</p>
+          <i class="fas fa-clock text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Awaiting confirmation</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-rose-50 to-white rounded-2xl p-4 shadow-sm border border-rose-100/60">
-      <p class="text-[11px] text-rose-600 uppercase tracking-wide font-semibold">Failed</p>
-      <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ failed_count }}</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Failed</p>
+          <i class="fas fa-circle-xmark text-rose-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ failed_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Needs review</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all col-span-2 lg:col-span-1">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total collected</p>
+          <i class="fas fa-coins text-primary text-sm"></i>
+        </div>
+        <p id="statTotal" class="text-2xl font-extrabold text-primary mt-1 truncate">{{ total_collected|ghs }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">On this page</p>
+      </div>
     </div>
   </div>
 
-  <!-- Search + filter -->
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
-    <div class="relative flex-1">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="billSearch" placeholder="Search reference or tenant code..."
-        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Payment status filters">
+        <button data-status="all" class="bill-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ payments|length }}</span>
+        </button>
+        <button data-status="success" class="bill-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Success <span class="ml-0.5 text-gray-400">{{ success_count }}</span>
+        </button>
+        <button data-status="pending" class="bill-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-clock mr-1 text-[10px] text-amber-500"></i> Pending <span class="ml-0.5 text-gray-400">{{ pending_count }}</span>
+        </button>
+        <button data-status="failed" class="bill-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-xmark mr-1 text-[10px] text-rose-500"></i> Failed <span class="ml-0.5 text-gray-400">{{ failed_count }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="billSearch" placeholder="Search reference or tenant… (/)" autocomplete="off"
+            aria-label="Search payments"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="billSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="billSort" aria-label="Sort payments"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="amount-desc">Amount (high → low)</option>
+            <option value="tenant">Tenant code (A–Z)</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
     </div>
-    <select id="billFilter"
-      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary">
-      <option value="">All statuses</option>
-      <option value="success">Success</option>
-      <option value="pending">Pending</option>
-      <option value="failed">Failed</option>
-    </select>
   </div>
   {% endif %}
 
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+
     <!-- Desktop table -->
     <div class="hidden md:block overflow-x-auto table-scroll">
       <table class="w-full text-sm">
@@ -65,14 +137,30 @@
             <th class="px-5 py-3 text-left font-semibold">Amount</th>
             <th class="px-5 py-3 text-left font-semibold">Status</th>
             <th class="px-5 py-3 text-left font-semibold">Paid at</th>
+            <th class="px-5 py-3 text-right font-semibold"></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100" id="billTableBody">
           {% for p in payments %}
           <tr class="bill-row hover:bg-gray-50/70 transition"
             data-status="{{ p.status }}"
+            data-total="{{ p.amount }}"
+            data-ts="{{ (p.paid_at or p.created_at).isoformat() if (p.paid_at or p.created_at) else '' }}"
+            data-tenant="{{ (p.tenant_code or '')|lower|e }}"
             data-search="{{ ((p.paystack_reference or '') ~ ' ' ~ (p.tenant_code or ''))|lower|e }}">
-            <td class="px-5 py-3.5 font-mono text-xs text-gray-800">{{ p.paystack_reference or '—' }}</td>
+
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-1.5 group/ref">
+                <span class="font-mono text-xs text-gray-800">{{ p.paystack_reference or '—' }}</span>
+                {% if p.paystack_reference %}
+                <button type="button"
+                  class="copy-ref-btn opacity-0 group-hover/ref:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                  data-copy="{{ p.paystack_reference|e }}" title="Copy reference" aria-label="Copy reference">
+                  <i class="fas fa-copy text-[10px]"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
             <td class="px-5 py-3.5 text-gray-600 font-mono text-xs">{{ p.tenant_code or '—' }}</td>
             <td class="px-5 py-3.5 font-bold text-gray-800 whitespace-nowrap">{{ p.amount|ghs }}</td>
             <td class="px-5 py-3.5">
@@ -90,10 +178,19 @@
               </span>
             </td>
             <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">{{ p.paid_at|nice_datetime if p.paid_at else p.created_at|nice_datetime }}</td>
+            <td class="px-5 py-3.5 text-right">
+              {% if p.tenant_id %}
+              <a href="{{ url_for('super_admin.tenant_detail', tenant_id=p.tenant_id) }}"
+                 class="text-[11px] text-primary hover:underline font-semibold inline-flex items-center gap-1"
+                 aria-label="View tenant">
+                View <i class="fas fa-arrow-right text-[9px]"></i>
+              </a>
+              {% endif %}
+            </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" class="px-5 py-16 text-center text-gray-400">
+            <td colspan="6" class="px-5 py-16 text-center text-gray-400">
               <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
                 <i class="fas fa-receipt text-2xl text-gray-300"></i>
               </div>
@@ -103,18 +200,42 @@
           </tr>
           {% endfor %}
         </tbody>
+        {% if payments %}
+        <tfoot class="bg-gray-50 font-semibold text-gray-800 border-t-2 border-gray-100">
+          <tr>
+            <td colspan="2" class="px-5 py-3 text-xs uppercase tracking-wide text-gray-500">
+              <span id="billFooterCount">{{ payments|length }}</span> record<span id="billFooterPlural">s</span>
+            </td>
+            <td colspan="3" class="px-5 py-3 text-right text-xs uppercase tracking-wide text-gray-500">Total shown</td>
+            <td class="px-5 py-3 text-right text-primary whitespace-nowrap" id="billFooterTotal">—</td>
+          </tr>
+        </tfoot>
+        {% endif %}
       </table>
     </div>
 
     <!-- Mobile list -->
-    <div class="md:hidden divide-y divide-gray-100">
+    <div class="md:hidden divide-y divide-gray-100" id="billMobileList">
       {% for p in payments %}
       <div class="bill-row p-4"
         data-status="{{ p.status }}"
+        data-total="{{ p.amount }}"
+        data-ts="{{ (p.paid_at or p.created_at).isoformat() if (p.paid_at or p.created_at) else '' }}"
+        data-tenant="{{ (p.tenant_code or '')|lower|e }}"
         data-search="{{ ((p.paystack_reference or '') ~ ' ' ~ (p.tenant_code or ''))|lower|e }}">
+
         <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="min-w-0">
-            <p class="text-xs font-mono text-gray-700 truncate">{{ p.paystack_reference or '—' }}</p>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <p class="text-xs font-mono text-gray-700 truncate">{{ p.paystack_reference or '—' }}</p>
+              {% if p.paystack_reference %}
+              <button type="button"
+                class="copy-ref-btn text-gray-400 hover:text-primary p-1 rounded transition"
+                data-copy="{{ p.paystack_reference|e }}" title="Copy reference" aria-label="Copy reference">
+                <i class="fas fa-copy text-[10px]"></i>
+              </button>
+              {% endif %}
+            </div>
             <p class="text-[11px] text-gray-400 font-mono mt-0.5">{{ p.tenant_code or '—' }}</p>
           </div>
           <span class="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap flex-shrink-0
@@ -131,6 +252,14 @@
           </p>
           <p class="font-bold text-primary">{{ p.amount|ghs }}</p>
         </div>
+        {% if p.tenant_id %}
+        <div class="mt-2">
+          <a href="{{ url_for('super_admin.tenant_detail', tenant_id=p.tenant_id) }}"
+             class="text-[11px] text-primary hover:underline font-semibold inline-flex items-center gap-1">
+            View tenant <i class="fas fa-arrow-right text-[9px]"></i>
+          </a>
+        </div>
+        {% endif %}
       </div>
       {% else %}
       <div class="p-10 text-center text-gray-400">
@@ -138,15 +267,31 @@
         No payments recorded.
       </div>
       {% endfor %}
+      {% if payments %}
+      <div class="p-4 bg-gray-50 flex items-center justify-between">
+        <span class="text-xs uppercase tracking-wide font-semibold text-gray-500">
+          <span id="billMobileCount">{{ payments|length }}</span> shown
+        </span>
+        <span class="font-extrabold text-primary" id="billMobileTotal">—</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- No results -->
+    <div id="billNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+      <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-search text-2xl text-gray-300"></i>
+      </div>
+      <p class="font-medium text-gray-500">No payments match your filters</p>
+      <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+      <button type="button" onclick="clearBillFilters()"
+        class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+        <i class="fas fa-rotate-left text-xs"></i> Clear filters
+      </button>
     </div>
   </div>
 
-  <div id="billNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No payments match your filters.</p>
-  </div>
-
-  {% if page > 1 or payments|length >= 50 %}
+  {% if payments %}
   <div class="flex justify-center items-center gap-3 mt-6">
     {% if page > 1 %}
       <a href="{{ url_for('super_admin.billing', page=page-1) }}"
@@ -164,31 +309,194 @@
   </div>
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- Filter / Search / Sort ---------- */
+  var activeStatus = 'all';
+
+  function applyBillFilters() {
+    var search = document.getElementById('billSearch');
+    var noResults = document.getElementById('billNoResults');
+    var hdrCount = document.getElementById('hdrCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+    var shownTotal = 0;
+
+    document.querySelectorAll('.bill-row').forEach(function (row) {
+      var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeStatus === 'all' || row.dataset.status === activeStatus;
+      var show = ms && mf;
+      row.style.display = show ? '' : 'none';
+      if (show) {
+        visible++;
+        shownTotal += parseFloat(row.dataset.total) || 0;
+      }
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (hdrCount) hdrCount.textContent = visible;
+
+    var footerCount = document.getElementById('billFooterCount');
+    var footerPlural = document.getElementById('billFooterPlural');
+    var footerTotal = document.getElementById('billFooterTotal');
+    var mobileCount = document.getElementById('billMobileCount');
+    var mobileTotal = document.getElementById('billMobileTotal');
+
+    if (footerCount) footerCount.textContent = visible;
+    if (footerPlural) footerPlural.textContent = visible === 1 ? '' : 's';
+    if (footerTotal) footerTotal.textContent = 'GH₵ ' + shownTotal.toFixed(2);
+    if (mobileCount) mobileCount.textContent = visible;
+    if (mobileTotal) mobileTotal.textContent = 'GH₵ ' + shownTotal.toFixed(2);
+
+    var statTotal = document.getElementById('statTotal');
+    if (statTotal && activeStatus === 'success') statTotal.textContent = 'GH₵ ' + shownTotal.toFixed(2);
+  }
+
+  function sortBill(mode) {
+    ['billTableBody', 'billMobileList'].forEach(function (id) {
+      var container = document.getElementById(id);
+      if (!container) return;
+      var rows = Array.from(container.querySelectorAll('.bill-row'));
+      if (!rows.length) return;
+      rows.sort(function (a, b) {
+        function num(v) { return parseFloat(v) || 0; }
+        switch (mode) {
+          case 'oldest': return (a.dataset.ts || '').localeCompare(b.dataset.ts || '');
+          case 'amount-desc': return num(b.dataset.total) - num(a.dataset.total);
+          case 'tenant': return (a.dataset.tenant || '').localeCompare(b.dataset.tenant || '');
+          default: return (b.dataset.ts || '').localeCompare(a.dataset.ts || '');
+        }
+      });
+      rows.forEach(function (r) { container.appendChild(r); });
+    });
+  }
+
+  function clearBillFilters() {
+    activeStatus = 'all';
+    document.querySelectorAll('.bill-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.bill-chip[data-status="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('billSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('billSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('billSort');
+    if (sortSel) sortSel.value = 'newest';
+    sortBill('newest');
+    applyBillFilters();
+  }
+
+  /* ---------- Wire up ---------- */
   (function () {
     var search = document.getElementById('billSearch');
-    var filter = document.getElementById('billFilter');
-    var noResults = document.getElementById('billNoResults');
-    if (!search && !filter) return;
+    var searchClear = document.getElementById('billSearchClear');
+    var sortSel = document.getElementById('billSort');
 
-    function apply() {
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var f = filter ? filter.value : '';
-      var visible = 0;
-      document.querySelectorAll('.bill-row').forEach(function (row) {
-        var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
-        var mf = !f || row.dataset.status === f;
-        var show = ms && mf;
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      applyBillFilters();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyBillFilters();
       });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
     }
-    if (search) search.addEventListener('input', apply);
-    if (filter) filter.addEventListener('change', apply);
+
+    document.querySelectorAll('.bill-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.bill-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeStatus = chip.dataset.status;
+        applyBillFilters();
+      });
+    });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortBill(this.value); });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+
+    // Initial footer total
+    applyBillFilters();
+  })();
+
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-ref-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+
+      function done() { showToast('Reference copied: ' + text); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

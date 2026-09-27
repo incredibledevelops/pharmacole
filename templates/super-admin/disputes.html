@@ -9,7 +9,10 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Disputes</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">Billing disputes and flags</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        Billing disputes and flags ·
+        <span id="hdrCount" aria-live="polite">{{ disputes|length }}</span> total
+      </p>
     </div>
   </div>
 </header>
@@ -18,90 +21,199 @@
 
   {% set open_count = disputes|selectattr('status','equalto','open')|list|length %}
   {% set resolved_count = disputes|selectattr('status','equalto','resolved')|list|length %}
-  {% set other_count = disputes|length - open_count - resolved_count %}
+  {% set rejected_count = disputes|selectattr('status','equalto','rejected')|list|length %}
+  {% set other_count = disputes|length - open_count - resolved_count - rejected_count %}
 
   {% if disputes %}
-  <!-- Stats -->
-  <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
-    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
-      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">Open</p>
-      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ open_count }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Needs attention</p>
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Open</p>
+          <i class="fas fa-triangle-exclamation text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ open_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Needs attention</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 shadow-sm border border-emerald-100/60">
-      <p class="text-[11px] text-emerald-600 uppercase tracking-wide font-semibold">Resolved</p>
-      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ resolved_count }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Closed cleanly</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Resolved</p>
+          <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ resolved_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Closed cleanly</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">Other</p>
-      <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ other_count }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Rejected / etc.</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Rejected</p>
+          <i class="fas fa-circle-xmark text-rose-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-rose-500 mt-1">{{ rejected_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Not upheld</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total</p>
+          <i class="fas fa-list text-blue-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-blue-600 mt-1">{{ disputes|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">
+          {% if other_count %}incl. {{ other_count }} other{% else %}All-time{% endif %}
+        </p>
+      </div>
     </div>
   </div>
 
-  <!-- Search + filter -->
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
-    <div class="relative flex-1">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="dispSearch" placeholder="Search subject, tenant, or description..."
-        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Dispute filters">
+        <button data-status="all" class="disp-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ disputes|length }}</span>
+        </button>
+        <button data-status="open" class="disp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-amber-500"></i> Open <span class="ml-0.5 text-gray-400">{{ open_count }}</span>
+        </button>
+        <button data-status="resolved" class="disp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Resolved <span class="ml-0.5 text-gray-400">{{ resolved_count }}</span>
+        </button>
+        <button data-status="rejected" class="disp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-xmark mr-1 text-[10px] text-rose-500"></i> Rejected <span class="ml-0.5 text-gray-400">{{ rejected_count }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="dispSearch" placeholder="Search subject, tenant… (/)" autocomplete="off"
+            aria-label="Search disputes"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="dispSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="dispSort" aria-label="Sort disputes"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="subject">Subject (A–Z)</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
     </div>
-    <select id="dispFilter"
-      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary">
-      <option value="">All statuses</option>
-      <option value="open">Open</option>
-      <option value="resolved">Resolved</option>
-      <option value="rejected">Rejected</option>
-    </select>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="dispGrid">
     {% for d in disputes %}
+    {% set age_hours = ((now() - d.created_at).total_seconds() / 3600) if d.created_at else 0 %}
+    {% set is_overdue = age_hours >= 168 and (d.status == 'open' or not d.status) %}
+    {% set is_aging = age_hours >= 48 and age_hours < 168 and (d.status == 'open' or not d.status) %}
+    {% set dispute_status = d.status or 'open' %}
+
     <article class="disp-card group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-primary/20 transition-all duration-300"
-      data-status="{{ d.status or 'open' }}"
+      data-status="{{ dispute_status }}"
+      data-subject="{{ (d.subject or 'Dispute')|e }}"
+      data-created="{{ d.created_at.isoformat() if d.created_at else '' }}"
       data-search="{{ ((d.subject or '') ~ ' ' ~ (d.tenant_code or '') ~ ' ' ~ (d.description or ''))|lower|e }}">
 
       <div class="flex items-start justify-between gap-3 mb-3">
         <div class="flex items-start gap-3 min-w-0 flex-1">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
-            {% if d.status == 'open' %}bg-amber-50 text-amber-600
-            {% elif d.status == 'resolved' %}bg-emerald-50 text-emerald-600
+            {% if dispute_status == 'open' %}bg-amber-50 text-amber-600
+            {% elif dispute_status == 'resolved' %}bg-emerald-50 text-emerald-600
             {% else %}bg-gray-100 text-gray-500{% endif %}">
-            <i class="fas fa-{% if d.status == 'open' %}triangle-exclamation{% elif d.status == 'resolved' %}circle-check{% else %}circle-xmark{% endif %}"></i>
+            <i class="fas fa-{% if dispute_status == 'open' %}triangle-exclamation{% elif dispute_status == 'resolved' %}circle-check{% else %}circle-xmark{% endif %}"></i>
           </div>
-          <div class="min-w-0">
-            <p class="font-semibold text-gray-800 truncate">{{ d.subject or 'Dispute' }}</p>
-            <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1">
-              <i class="fas fa-calendar text-[9px]"></i> {{ d.created_at|nice_date }}
-              {% if d.tenant_code %} · <span class="font-mono">{{ d.tenant_code }}</span>{% endif %}
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 group/subj">
+              <p class="font-semibold text-gray-800 truncate">{{ d.subject or 'Dispute' }}</p>
+              {% if d.subject %}
+              <button type="button"
+                class="copy-btn opacity-0 group-hover/subj:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                data-copy="{{ d.subject|e }}" title="Copy subject" aria-label="Copy subject">
+                <i class="fas fa-copy text-[10px]"></i>
+              </button>
+              {% endif %}
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
+              <span class="inline-flex items-center gap-1">
+                <i class="fas fa-calendar text-[9px]"></i> {{ d.created_at|nice_date }}
+              </span>
+              <span class="text-gray-300">·</span>
+              <span class="disp-relative text-gray-500" data-created="{{ d.created_at.isoformat() if d.created_at else '' }}">—</span>
+              {% if d.tenant_code %}
+                <span class="text-gray-300">·</span>
+                <span class="font-mono text-gray-500">{{ d.tenant_code }}</span>
+                <button type="button"
+                  class="copy-btn opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary p-0.5 rounded transition"
+                  data-copy="{{ d.tenant_code|e }}" title="Copy tenant code" aria-label="Copy tenant code">
+                  <i class="fas fa-copy text-[9px]"></i>
+                </button>
+              {% endif %}
             </p>
           </div>
         </div>
+
         <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
-          {% if d.status == 'open' %}bg-amber-100 text-amber-700
-          {% elif d.status == 'resolved' %}bg-emerald-100 text-emerald-700
+          {% if dispute_status == 'open' %}bg-amber-100 text-amber-700
+          {% elif dispute_status == 'resolved' %}bg-emerald-100 text-emerald-700
           {% else %}bg-gray-100 text-gray-600{% endif %}">
-          {% if d.status == 'open' %}
+          {% if dispute_status == 'open' %}
             <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Open
-          {% elif d.status == 'resolved' %}
+          {% elif dispute_status == 'resolved' %}
             <i class="fas fa-check text-[9px]"></i> Resolved
           {% else %}
-            {{ (d.status or 'open')|capitalize }}
+            {{ dispute_status|capitalize }}
           {% endif %}
         </span>
       </div>
 
-      {% if d.description %}
-      <p class="text-sm text-gray-600 mb-4 leading-relaxed line-clamp-4">{{ d.description }}</p>
+      {% if is_overdue %}
+        <div class="mb-3 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">
+          <i class="fas fa-exclamation-triangle text-[10px]"></i> Overdue — open 7+ days
+        </div>
+      {% elif is_aging %}
+        <div class="mb-3 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+          <i class="fas fa-hourglass-half text-[10px]"></i> Aging — open 2+ days
+        </div>
       {% endif %}
 
-      {% if d.status == 'open' %}
+      {% if d.description %}
+      <div class="mb-4 group/desc relative">
+        <p class="text-sm text-gray-600 leading-relaxed line-clamp-4 pr-8">{{ d.description }}</p>
+        <button type="button"
+          class="copy-btn absolute top-0 right-0 opacity-0 group-hover/desc:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+          data-copy="{{ d.description|e }}" title="Copy description" aria-label="Copy description">
+          <i class="fas fa-copy text-[10px]"></i>
+        </button>
+      </div>
+      {% endif %}
+
+      {% if dispute_status == 'open' %}
       <div class="flex gap-2 pt-1">
         <form method="POST" action="{{ url_for('super_admin.set_dispute_status', dispute_id=d._id) }}" class="flex-1">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="resolved">
-          <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+          <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
             <i class="fas fa-check"></i> Resolve
           </button>
         </form>
@@ -109,27 +221,36 @@
           onsubmit="return confirm('Reject this dispute?')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="rejected">
-          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
             <i class="fas fa-xmark"></i> Reject
           </button>
         </form>
       </div>
       {% else %}
-      <p class="text-[11px] text-gray-400 pt-1">
-        <i class="fas fa-lock text-[9px] mr-1"></i>
-        {{ 'Resolved and closed' if d.status == 'resolved' else 'Rejected — no action needed' }}
+      <p class="text-[11px] text-gray-400 pt-1 inline-flex items-center gap-1">
+        <i class="fas fa-lock text-[9px]"></i>
+        {{ 'Resolved and closed' if dispute_status == 'resolved' else 'Rejected — no action needed' }}
       </p>
       {% endif %}
     </article>
     {% endfor %}
   </div>
 
-  <div id="dispNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No disputes match your filters.</p>
+  <!-- No results -->
+  <div id="dispNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+    <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+      <i class="fas fa-search text-2xl text-gray-300"></i>
+    </div>
+    <p class="font-medium text-gray-500">No disputes match your filters</p>
+    <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+    <button type="button" onclick="clearDispFilters()"
+      class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+      <i class="fas fa-rotate-left text-xs"></i> Clear filters
+    </button>
   </div>
 
   {% else %}
+
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
     <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-4">
       <i class="fas fa-circle-check text-3xl text-emerald-500"></i>
@@ -137,33 +258,199 @@
     <p class="text-gray-700 font-semibold text-lg">All clear!</p>
     <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">No disputes need your attention right now. New disputes from tenants will show up here.</p>
   </div>
+
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- Relative time ---------- */
+  (function () {
+    function humanize(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var diff = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      if (diff < 172800) return 'yesterday';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+      return Math.floor(diff / 604800) + 'w ago';
+    }
+    function update() {
+      document.querySelectorAll('.disp-relative').forEach(function (el) {
+        var h = humanize(el.dataset.created);
+        if (h) el.textContent = h;
+      });
+    }
+    update();
+    setInterval(update, 60000);
+  })();
+
+  /* ---------- Filter / Search / Sort ---------- */
+  var activeDispFilter = 'all';
+
+  function applyDispFilters() {
+    var search = document.getElementById('dispSearch');
+    var noResults = document.getElementById('dispNoResults');
+    var hdrCount = document.getElementById('hdrCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+
+    document.querySelectorAll('.disp-card').forEach(function (card) {
+      var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeDispFilter === 'all' || card.dataset.status === activeDispFilter;
+      var show = ms && mf;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (hdrCount) hdrCount.textContent = visible;
+  }
+
+  function sortDisp(mode) {
+    var grid = document.getElementById('dispGrid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.disp-card'));
+    if (!cards.length) return;
+    cards.sort(function (a, b) {
+      switch (mode) {
+        case 'oldest': return (a.dataset.created || '').localeCompare(b.dataset.created || '');
+        case 'subject': return (a.dataset.subject || '').localeCompare(b.dataset.subject || '');
+        default: return (b.dataset.created || '').localeCompare(a.dataset.created || '');
+      }
+    });
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  function clearDispFilters() {
+    activeDispFilter = 'all';
+    document.querySelectorAll('.disp-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.disp-chip[data-status="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('dispSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('dispSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('dispSort');
+    if (sortSel) sortSel.value = 'newest';
+    sortDisp('newest');
+    applyDispFilters();
+  }
+
+  /* ---------- Wire up ---------- */
   (function () {
     var search = document.getElementById('dispSearch');
-    var filter = document.getElementById('dispFilter');
-    var noResults = document.getElementById('dispNoResults');
-    if (!search && !filter) return;
+    var searchClear = document.getElementById('dispSearchClear');
+    var sortSel = document.getElementById('dispSort');
 
-    function apply() {
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var f = filter ? filter.value : '';
-      var visible = 0;
-      document.querySelectorAll('.disp-card').forEach(function (card) {
-        var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
-        var mf = !f || card.dataset.status === f;
-        var show = ms && mf;
-        card.style.display = show ? '' : 'none';
-        if (show) visible++;
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      applyDispFilters();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyDispFilters();
       });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
     }
-    if (search) search.addEventListener('input', apply);
-    if (filter) filter.addEventListener('change', apply);
+
+    document.querySelectorAll('.disp-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.disp-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeDispFilter = chip.dataset.status;
+        applyDispFilters();
+      });
+    });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortDisp(this.value); });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+
+    // Initial sort to match dropdown
+    sortDisp('newest');
+  })();
+
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+
+      function done() { showToast('Copied'); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

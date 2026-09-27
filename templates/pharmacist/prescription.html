@@ -9,7 +9,9 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Prescriptions</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block" id="rxCount">{{ prescriptions|length }} records</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        <span id="rxCount" aria-live="polite">{{ prescriptions|length }}</span> records · <span id="rxVisibleCount">all shown</span>
+      </p>
     </div>
   </div>
 </header>
@@ -21,46 +23,125 @@
   {% set cancelled = prescriptions|selectattr('status','equalto','cancelled')|list %}
 
   {% if prescriptions %}
-  <!-- Stats -->
-  <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
-    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
-      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">Pending</p>
-      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Awaiting action</p>
-    </div>
-    <div class="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 shadow-sm border border-emerald-100/60">
-      <p class="text-[11px] text-emerald-600 uppercase tracking-wide font-semibold">Dispensed</p>
-      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ dispensed|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Completed</p>
-    </div>
-    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">Cancelled</p>
-      <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ cancelled|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Not dispensed</p>
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <button type="button" data-stat-chip="pending"
+      class="stat-chip text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md hover:border-amber-300/40 transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Pending</p>
+          <i class="fas fa-clock text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Awaiting action</p>
+      </div>
+    </button>
+
+    <button type="button" data-stat-chip="dispensed"
+      class="stat-chip text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md hover:border-emerald-300/40 transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Dispensed</p>
+          <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ dispensed|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Completed</p>
+      </div>
+    </button>
+
+    <button type="button" data-stat-chip="cancelled"
+      class="stat-chip text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-gray-400 to-slate-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Cancelled</p>
+          <i class="fas fa-circle-xmark text-gray-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ cancelled|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Not dispensed</p>
+      </div>
+    </button>
+
+    <button type="button" data-stat-chip="today"
+      class="stat-chip text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md hover:border-primary/40 transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Received today</p>
+          <i class="fas fa-calendar-day text-primary text-sm"></i>
+        </div>
+        <p id="statToday" class="text-2xl font-extrabold text-primary mt-1">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">New today</p>
+      </div>
+    </button>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Prescription filters">
+        <button data-filter="all" class="rx-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ prescriptions|length }}</span>
+        </button>
+        <button data-filter="pending" class="rx-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-clock mr-1 text-[10px] text-amber-500"></i> Pending <span class="ml-0.5 text-gray-400">{{ pending|length }}</span>
+        </button>
+        <button data-filter="dispensed" class="rx-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Dispensed <span class="ml-0.5 text-gray-400">{{ dispensed|length }}</span>
+        </button>
+        <button data-filter="cancelled" class="rx-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-xmark mr-1 text-[10px] text-gray-500"></i> Cancelled <span class="ml-0.5 text-gray-400">{{ cancelled|length }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="rxSearch" placeholder="Search patient, doctor, notes…" autocomplete="off"
+            aria-label="Search prescriptions"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="rxSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="rxSort" aria-label="Sort prescriptions"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="default">Sort</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="patient">Patient (A–Z)</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Search + filter -->
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
-    <div class="relative flex-1">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="rxSearch" placeholder="Search patient, doctor, or notes..."
-        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
-    </div>
-    <select id="rxFilter"
-      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary">
-      <option value="">All statuses</option>
-      <option value="pending">Pending</option>
-      <option value="dispensed">Dispensed</option>
-      <option value="cancelled">Cancelled</option>
-    </select>
-  </div>
-
+  <!-- Grid -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="rxGrid">
     {% for rx in prescriptions %}
-    <article class="rx-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md hover:border-primary/20 transition-all duration-300"
+    {% set age_hours = ((now() - rx.created_at).total_seconds() / 3600) if rx.created_at else 0 %}
+    {% set is_aging = age_hours >= 24 and age_hours < 48 and rx.status == 'pending' %}
+    {% set is_overdue = age_hours >= 48 and rx.status == 'pending' %}
+
+    <article class="rx-card relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md hover:border-primary/20 transition-all duration-300 overflow-hidden"
       data-status="{{ rx.status }}"
-      data-search="{{ ((rx.patient_name or '') ~ ' ' ~ (rx.doctor_name or '') ~ ' ' ~ (rx.notes or ''))|lower }}">
+      data-name="{{ (rx.patient_name or '')|e }}"
+      data-created="{{ rx.created_at.isoformat() if rx.created_at else '' }}"
+      data-search="{{ ((rx.patient_name or '') ~ ' ' ~ (rx.doctor_name or '') ~ ' ' ~ (rx.notes or ''))|lower|e }}">
+
+      <!-- Left status bar -->
+      <span class="absolute left-0 top-0 bottom-0 w-1
+        {% if rx.status == 'pending' %}bg-amber-400
+        {% elif rx.status == 'dispensed' %}bg-emerald-500
+        {% else %}bg-gray-300{% endif %}"
+        aria-hidden="true"></span>
 
       <div class="flex items-start justify-between gap-3 mb-3">
         <div class="flex items-start gap-3 min-w-0 flex-1">
@@ -70,11 +151,21 @@
             {% else %}bg-gray-100 text-gray-500{% endif %}">
             <i class="fas fa-file-prescription"></i>
           </div>
-          <div class="min-w-0">
-            <p class="font-semibold text-gray-800 truncate">{{ rx.patient_name or 'Unknown patient' }}</p>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 group/pt">
+              <p class="font-semibold text-gray-800 truncate">{{ rx.patient_name or 'Unknown patient' }}</p>
+              {% if rx.patient_name %}
+              <button type="button"
+                class="copy-text-btn opacity-0 group-hover/pt:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                data-copy="{{ rx.patient_name|e }}" data-label="Patient name" title="Copy patient name" aria-label="Copy patient name">
+                <i class="fas fa-copy text-[10px]"></i>
+              </button>
+              {% endif %}
+            </div>
             <p class="text-xs text-gray-400 truncate">Dr. {{ rx.doctor_name or '—' }}</p>
           </div>
         </div>
+
         <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
           {% if rx.status == 'pending' %}bg-amber-100 text-amber-700
           {% elif rx.status == 'dispensed' %}bg-emerald-100 text-emerald-700
@@ -89,12 +180,38 @@
         </span>
       </div>
 
-      <p class="text-[11px] text-gray-400 mb-3 inline-flex items-center gap-1">
-        <i class="fas fa-calendar-day text-[10px]"></i> Received {{ rx.created_at|nice_date }}
-      </p>
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <p class="text-[11px] text-gray-400 inline-flex items-center gap-1">
+          <i class="fas fa-calendar-day text-[10px]"></i>
+          {{ rx.created_at|nice_date }}
+        </p>
+        {% if rx.created_at %}
+        <span class="text-[10px] text-gray-300">·</span>
+        <p class="text-[11px] text-gray-500 inline-flex items-center gap-1">
+          <i class="fas fa-clock text-[10px] text-gray-400"></i>
+          <span class="rx-relative-time" data-created="{{ rx.created_at.isoformat() }}">{{ age_hours|round(0)|int }}h ago</span>
+        </p>
+        {% endif %}
+        {% if is_overdue %}
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold inline-flex items-center gap-1">
+            <i class="fas fa-exclamation-triangle text-[9px]"></i> Overdue
+          </span>
+        {% elif is_aging %}
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold inline-flex items-center gap-1">
+            <i class="fas fa-hourglass-half text-[9px]"></i> Aging
+          </span>
+        {% endif %}
+      </div>
 
       {% if rx.notes %}
-      <p class="text-xs text-gray-600 italic border-l-2 border-gray-200 pl-3 mb-3 leading-relaxed">{{ rx.notes }}</p>
+      <div class="mb-3 group/notes relative">
+        <p class="text-xs text-gray-600 italic border-l-2 border-gray-200 pl-3 leading-relaxed pr-8">{{ rx.notes }}</p>
+        <button type="button"
+          class="copy-text-btn absolute top-0 right-0 opacity-0 group-hover/notes:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+          data-copy="{{ rx.notes|e }}" data-label="Notes" title="Copy notes" aria-label="Copy notes">
+          <i class="fas fa-copy text-[10px]"></i>
+        </button>
+      </div>
       {% endif %}
 
       {% if rx.status == 'pending' %}
@@ -102,7 +219,7 @@
         <form method="POST" action="{{ url_for('pharmacist.set_prescription_status', rx_id=rx._id) }}" class="flex-1">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="dispensed">
-          <button class="w-full bg-primary hover:bg-primaryLight text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+          <button class="w-full bg-primary hover:bg-primaryLight text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
             <i class="fas fa-check"></i> Dispense
           </button>
         </form>
@@ -110,14 +227,14 @@
           onsubmit="return confirm('Cancel this prescription?')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="cancelled">
-          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
             <i class="fas fa-xmark"></i> Cancel
           </button>
         </form>
       </div>
       {% else %}
-      <p class="text-[11px] text-gray-400 pt-1">
-        <i class="fas fa-lock text-[9px] mr-1"></i>
+      <p class="text-[11px] text-gray-400 pt-1 inline-flex items-center gap-1">
+        <i class="fas fa-lock text-[9px]"></i>
         {{ 'Dispensed and closed' if rx.status == 'dispensed' else 'Cancelled — no action needed' }}
       </p>
       {% endif %}
@@ -125,9 +242,17 @@
     {% endfor %}
   </div>
 
-  <div id="rxNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No prescriptions match your filters.</p>
+  <!-- No results -->
+  <div id="rxNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+    <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+      <i class="fas fa-search text-2xl text-gray-300"></i>
+    </div>
+    <p class="font-medium text-gray-500">No prescriptions match your filters</p>
+    <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+    <button type="button" onclick="clearRxFilters()"
+      class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+      <i class="fas fa-rotate-left text-xs"></i> Clear filters
+    </button>
   </div>
 
   {% else %}
@@ -140,30 +265,223 @@
   </div>
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- Relative time updater ---------- */
+  (function () {
+    function humanize(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var diff = Math.floor((Date.now() - d.getTime()) / 1000); // seconds
+      if (diff < 0) return 'just now';
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      if (diff < 172800) return 'yesterday';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+      return Math.floor(diff / 604800) + 'w ago';
+    }
+    function update() {
+      document.querySelectorAll('.rx-relative-time').forEach(function (el) {
+        var h = humanize(el.dataset.created);
+        if (h) el.textContent = h;
+      });
+    }
+    update();
+    setInterval(update, 60000); // every minute
+  })();
+
+  /* ---------- Stats: today counter ---------- */
+  (function () {
+    var el = document.getElementById('statToday');
+    if (!el) return;
+    var today = new Date();
+    var count = 0;
+    document.querySelectorAll('.rx-card').forEach(function (c) {
+      var iso = c.dataset.created;
+      if (!iso) return;
+      var d = new Date(iso);
+      if (!isNaN(d.getTime()) && d.toDateString() === today.toDateString()) count++;
+    });
+    el.textContent = count;
+  })();
+
+  /* ---------- Filter + search + sort ---------- */
+  var activeRxFilter = 'all';
+
+  function applyRxFilters() {
+    var search = document.getElementById('rxSearch');
+    var noResults = document.getElementById('rxNoResults');
+    var countEl = document.getElementById('rxCount');
+    var visibleCountEl = document.getElementById('rxVisibleCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+    var total = 0;
+
+    document.querySelectorAll('.rx-card').forEach(function (card) {
+      total++;
+      var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeRxFilter === 'all' || card.dataset.status === activeRxFilter;
+      var show = ms && mf;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (countEl) countEl.textContent = visible;
+    if (visibleCountEl) visibleCountEl.textContent = (visible === total) ? 'all shown' : 'of ' + total + ' shown';
+  }
+
+  function sortRx(mode) {
+    var grid = document.getElementById('rxGrid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.rx-card'));
+    if (!cards.length) return;
+    cards.sort(function (a, b) {
+      switch (mode) {
+        case 'newest': return (b.dataset.created || '').localeCompare(a.dataset.created || '');
+        case 'oldest': return (a.dataset.created || '').localeCompare(b.dataset.created || '');
+        case 'patient': return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        default: return 0;
+      }
+    });
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  function clearRxFilters() {
+    activeRxFilter = 'all';
+    document.querySelectorAll('.rx-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.rx-chip[data-filter="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('rxSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('rxSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('rxSort');
+    if (sortSel) sortSel.value = 'default';
+    sortRx('default');
+    applyRxFilters();
+  }
+
   (function () {
     var search = document.getElementById('rxSearch');
-    var filter = document.getElementById('rxFilter');
-    var noResults = document.getElementById('rxNoResults');
+    var searchClear = document.getElementById('rxSearchClear');
+    var sortSel = document.getElementById('rxSort');
 
-    function apply() {
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var f = filter ? filter.value : '';
-      var visible = 0;
-      document.querySelectorAll('.rx-card').forEach(function (card) {
-        var ms = !q || card.dataset.search.indexOf(q) !== -1;
-        var mf = !f || card.dataset.status === f;
-        var show = ms && mf;
-        card.style.display = show ? '' : 'none';
-        if (show) visible++;
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      applyRxFilters();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyRxFilters();
       });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
     }
-    if (search) search.addEventListener('input', apply);
-    if (filter) filter.addEventListener('change', apply);
+
+    document.querySelectorAll('.rx-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.rx-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeRxFilter = chip.dataset.filter;
+        applyRxFilters();
+      });
+    });
+
+    // Stat cards double as filter chips
+    document.querySelectorAll('.stat-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var f = chip.dataset.statChip;
+        if (f === 'today') return; // no filter for "today"
+        var target = document.querySelector('.rx-chip[data-filter="' + f + '"]');
+        if (target) target.click();
+      });
+    });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortRx(this.value); });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+  })();
+
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-text-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var text = btn.dataset.copy || '';
+      var label = btn.dataset.label || 'Value';
+      if (!text) return;
+
+      function done() { showToast(label + ' copied'); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

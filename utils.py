@@ -46,6 +46,29 @@ def _coerce_dt(value):
     return None
 
 
+def iso_or_str(value):
+    """
+    Safely return an ISO 8601 string.
+
+    - datetime/date → .isoformat()
+    - any other value → str(value)
+    - None → ''
+    """
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+# Public alias: templates can use `|as_dt` and it resolves to the same
+# function the rest of the codebase already relies on.
+as_dt = _coerce_dt
+
+
 def nice_date(value):
     dt = _coerce_dt(value)
     if not dt:
@@ -164,11 +187,18 @@ def to_int(value, default=0):
 # ---------------------------------------------------------------------------
 
 def register_jinja(app):
+    # Formatting filters
     app.jinja_env.filters["ghs"] = ghs
     app.jinja_env.filters["nice_date"] = nice_date
     app.jinja_env.filters["nice_datetime"] = nice_datetime
     app.jinja_env.filters["nice_time"] = nice_time
     app.jinja_env.filters["days_until"] = days_until
+
+    # Safe date filters
+    app.jinja_env.filters["iso_or_str"] = iso_or_str
+    app.jinja_env.filters["as_dt"] = as_dt
+
+    # Context globals
     app.jinja_env.globals.update(
         t_name=t_name,
         t_code=t_code,

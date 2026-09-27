@@ -9,11 +9,13 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Held orders</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">Parked carts waiting for checkout</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        Parked carts · <span id="heldCount" aria-live="polite">{{ held|length }}</span> waiting
+      </p>
     </div>
   </div>
   <a href="{{ url_for('cashier.pos') }}"
-     class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0">
+     class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0 active:scale-95">
     <i class="fas fa-cash-register"></i>
     <span class="hidden sm:inline">New sale</span>
     <span class="sm:hidden">POS</span>
@@ -23,37 +25,122 @@
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
   {% if held %}
-  <!-- Search -->
-  <div class="mb-5 flex items-center justify-between gap-3">
-    <p class="text-xs text-gray-500 font-medium">
-      <span id="heldCount">{{ held|length }}</span> held order{{ '' if held|length == 1 else 's' }}
-    </p>
-    <div class="relative w-48 sm:w-64">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="heldSearch" placeholder="Search held orders..."
-        class="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+
+  {# Compute total value and oldest age #}
+  {% set total_value = [] %}
+  {% for h in held %}{% set _ = total_value.append(h.total_amount) %}{% endfor %}
+  {% set total_held_value = total_value|sum %}
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-5">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Held orders</p>
+          <i class="fas fa-pause-circle text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ held|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Waiting for checkout</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Parked value</p>
+          <i class="fas fa-coins text-primary text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-primary mt-1 truncate">{{ total_held_value|ghs }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Total cart amount</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all col-span-2 lg:col-span-1">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Oldest order</p>
+          <i class="fas fa-hourglass-half text-blue-500 text-sm"></i>
+        </div>
+        <p id="oldestAge" class="text-2xl font-extrabold text-blue-600 mt-1">—</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Keep it moving</p>
+      </div>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="relative flex-1">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+        <input type="text" id="heldSearch" placeholder="Search label, item, or amount…" autocomplete="off"
+          aria-label="Search held orders"
+          class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+        <button type="button" id="heldSearchClear"
+          class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+          aria-label="Clear search">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+      <div class="relative flex-shrink-0">
+        <select id="heldSort" aria-label="Sort held orders"
+          class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="value-desc">Value (high → low)</option>
+          <option value="label">Label (A–Z)</option>
+        </select>
+        <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="heldGrid">
     {% for h in held %}
+    {% set age_hours = ((now() - h.created_at).total_seconds() / 3600) if h.created_at else 0 %}
+    {% set is_stale = age_hours >= 24 %}
+    {% set is_aging = age_hours >= 4 and age_hours < 24 %}
+    {% set item_summary = [] %}
+    {% for item in h.items %}{% set _ = item_summary.append((item.name ~ ' ×' ~ (item.quantity|string))) %}{% endfor %}
+
     <div class="held-card group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-primary/20 transition-all duration-300"
-      data-search="{{ ((h.label or '') ~ ' ' ~ (h.created_at|string))|lower }}">
+      data-label="{{ (h.label or 'Held order')|e }}"
+      data-value="{{ h.total_amount }}"
+      data-created="{{ h.created_at.isoformat() if h.created_at else '' }}"
+      data-search="{{ ((h.label or '') ~ ' ' ~ (h.created_at|string) ~ ' ' ~ item_summary|join(' '))|lower|e }}">
 
       <div class="flex items-start justify-between gap-3 mb-3">
         <div class="flex items-start gap-3 min-w-0 flex-1">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-100 to-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition
+            {% if is_stale %}bg-gradient-to-br from-rose-100 to-rose-50 text-rose-600
+            {% else %}bg-gradient-to-br from-amber-100 to-amber-50 text-amber-600{% endif %}">
             <i class="fas fa-pause-circle"></i>
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="font-semibold text-gray-800 truncate">{{ h.label or 'Held order' }}</p>
-            <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1">
-              <i class="fas fa-clock text-[9px]"></i> {{ h.created_at|nice_datetime }}
+            <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
+              <span class="inline-flex items-center gap-1">
+                <i class="fas fa-clock text-[9px]"></i>
+                {{ h.created_at|nice_datetime }}
+              </span>
+              <span class="text-gray-300">·</span>
+              <span class="held-relative text-gray-500" data-created="{{ h.created_at.isoformat() if h.created_at else '' }}">—</span>
             </p>
           </div>
         </div>
-        <span class="text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-bold whitespace-nowrap inline-flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Held
+        <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
+          {% if is_stale %}bg-rose-100 text-rose-700
+          {% elif is_aging %}bg-amber-100 text-amber-700
+          {% else %}bg-amber-100 text-amber-700{% endif %}">
+          {% if is_stale %}
+            <i class="fas fa-exclamation-triangle text-[9px]"></i> Stale
+          {% elif is_aging %}
+            <i class="fas fa-hourglass-half text-[9px]"></i> Aging
+          {% else %}
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Held
+          {% endif %}
         </span>
       </div>
 
@@ -66,16 +153,30 @@
       </div>
 
       {% if h.items %}
-      <div class="bg-gray-50 rounded-xl p-2.5 mb-4 max-h-24 overflow-y-auto">
+      <div class="bg-gray-50 rounded-xl p-2.5 mb-4 max-h-24 overflow-y-auto" id="items-{{ h._id }}">
         <ul class="space-y-1 text-[11px] text-gray-600">
-          {% for item in h.items[:4] %}
+          {% for item in h.items[:3] %}
           <li class="flex justify-between gap-2">
             <span class="truncate">{{ item.name }}</span>
             <span class="text-gray-400 whitespace-nowrap">×{{ item.quantity }}</span>
           </li>
           {% endfor %}
-          {% if h.items|length > 4 %}
-          <li class="text-gray-400 italic">+ {{ h.items|length - 4 }} more…</li>
+          {% if h.items|length > 3 %}
+          <li class="held-extra hidden" data-hidden-count="{{ h.items|length - 3 }}">
+            {% for item in h.items[3:] %}
+            <span class="flex justify-between gap-2">
+              <span class="truncate">{{ item.name }}</span>
+              <span class="text-gray-400 whitespace-nowrap">×{{ item.quantity }}</span>
+            </span>
+            {% endfor %}
+          </li>
+          <li class="text-center pt-1">
+            <button type="button" class="expand-items-btn text-[10px] font-semibold text-primary hover:underline"
+              data-target="items-{{ h._id }}"
+              aria-label="Show all items">
+              Show all {{ h.items|length }} items
+            </button>
+          </li>
           {% endif %}
         </ul>
       </div>
@@ -83,13 +184,21 @@
 
       <div class="flex gap-2">
         <a href="{{ url_for('cashier.resume_held', held_id=h._id) }}"
-           class="flex-1 bg-primary hover:bg-primaryLight text-white text-sm font-semibold py-2.5 rounded-lg text-center transition inline-flex items-center justify-center gap-1.5">
+           class="resume-btn flex-1 bg-primary hover:bg-primaryLight text-white text-sm font-semibold py-2.5 rounded-lg text-center transition inline-flex items-center justify-center gap-1.5 active:scale-95"
+           data-stale="{{ 'true' if is_stale else 'false' }}"
+           data-label="{{ (h.label or 'Held order')|e }}">
           <i class="fas fa-play"></i> Resume
         </a>
+        <button type="button"
+          class="copy-held-btn border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-500 hover:text-primary text-sm font-medium py-2.5 px-3 rounded-lg transition"
+          data-copy="{{ ((h.label or 'Held order') ~ ' — ' ~ (h.items|length) ~ ' items · ' ~ item_summary|join(', ') ~ ' · Total ' ~ h.total_amount)|e }}"
+          aria-label="Copy order summary" title="Copy summary">
+          <i class="fas fa-copy"></i>
+        </button>
         <form method="POST" action="{{ url_for('cashier.delete_held', held_id=h._id) }}"
-          onsubmit="return confirm('Delete held order?')">
+          onsubmit="return confirm('Delete held order for {{ (h.label or 'this cart')|e }}?')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="border border-gray-200 hover:border-rose-300 hover:bg-rose-50 text-gray-500 hover:text-rose-500 text-sm font-medium py-2.5 px-3 rounded-lg transition"
+          <button class="border border-gray-200 hover:border-rose-300 hover:bg-rose-50 text-gray-500 hover:text-rose-500 text-sm font-medium py-2.5 px-3 rounded-lg transition active:scale-95"
             aria-label="Delete held order" title="Delete">
             <i class="fas fa-trash-alt"></i>
           </button>
@@ -99,12 +208,20 @@
     {% endfor %}
   </div>
 
-  <div id="heldNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No held orders match your search.</p>
+  <!-- No results -->
+  <div id="heldNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+    <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+      <i class="fas fa-search text-2xl text-gray-300"></i>
+    </div>
+    <p class="font-medium text-gray-500">No held orders match your search</p>
+    <button type="button" onclick="clearHeldFilters()"
+      class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+      <i class="fas fa-rotate-left text-xs"></i> Clear search
+    </button>
   </div>
 
   {% else %}
+
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
     <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center mx-auto mb-4">
       <i class="fas fa-pause-circle text-3xl text-amber-500"></i>
@@ -112,33 +229,224 @@
     <p class="text-gray-700 font-semibold text-lg">No held orders</p>
     <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">When you park a cart during a sale, it will show up here so you can resume it later.</p>
     <a href="{{ url_for('cashier.pos') }}"
-       class="mt-5 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all">
+       class="mt-5 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-95">
       <i class="fas fa-cash-register"></i> Go to Point of Sale
     </a>
   </div>
+
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- Relative time + oldest age ---------- */
   (function () {
+    function humanize(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var diff = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      if (diff < 172800) return 'yesterday';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+      return Math.floor(diff / 604800) + 'w ago';
+    }
+
+    function update() {
+      var oldest = null;
+      document.querySelectorAll('.held-relative').forEach(function (el) {
+        var h = humanize(el.dataset.created);
+        if (h) el.textContent = h;
+        var d = el.dataset.created ? new Date(el.dataset.created) : null;
+        if (d && !isNaN(d.getTime())) {
+          if (!oldest || d < oldest) oldest = d;
+        }
+      });
+      var el2 = document.getElementById('oldestAge');
+      if (el2) {
+        if (oldest) {
+          el2.textContent = humanize(oldest.toISOString());
+        } else {
+          el2.textContent = '—';
+        }
+      }
+    }
+    update();
+    setInterval(update, 60000);
+  })();
+
+  /* ---------- Filter / search / sort ---------- */
+  function applyHeldFilters() {
     var search = document.getElementById('heldSearch');
     var noResults = document.getElementById('heldNoResults');
-    var count = document.getElementById('heldCount');
-    if (!search) return;
+    var countEl = document.getElementById('heldCount');
 
-    search.addEventListener('input', function () {
-      var q = this.value.toLowerCase().trim();
-      var visible = 0;
-      document.querySelectorAll('.held-card').forEach(function (card) {
-        var match = !q || card.dataset.search.indexOf(q) !== -1;
-        card.style.display = match ? '' : 'none';
-        if (match) visible++;
-      });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
-      if (count) count.textContent = visible;
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+
+    document.querySelectorAll('.held-card').forEach(function (card) {
+      var match = !q || (card.dataset.search || '').indexOf(q) !== -1;
+      card.style.display = match ? '' : 'none';
+      if (match) visible++;
     });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (countEl) countEl.textContent = visible;
+  }
+
+  function sortHeld(mode) {
+    var grid = document.getElementById('heldGrid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.held-card'));
+    if (!cards.length) return;
+    cards.sort(function (a, b) {
+      function num(v) { return parseFloat(v) || 0; }
+      switch (mode) {
+        case 'oldest': return (a.dataset.created || '').localeCompare(b.dataset.created || '');
+        case 'value-desc': return num(b.dataset.value) - num(a.dataset.value);
+        case 'label': return (a.dataset.label || '').localeCompare(b.dataset.label || '');
+        default: return (b.dataset.created || '').localeCompare(a.dataset.created || '');
+      }
+    });
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  function clearHeldFilters() {
+    var s = document.getElementById('heldSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('heldSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('heldSort');
+    if (sortSel) sortSel.value = 'newest';
+    sortHeld('newest');
+    applyHeldFilters();
+  }
+
+  (function () {
+    var search = document.getElementById('heldSearch');
+    var searchClear = document.getElementById('heldSearchClear');
+    var sortSel = document.getElementById('heldSort');
+
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      applyHeldFilters();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyHeldFilters();
+      });
+    }
+    if (sortSel) sortSel.addEventListener('change', function () { sortHeld(this.value); });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+
+    // Initial sort applied to match the dropdown default
+    sortHeld('newest');
+  })();
+
+  /* ---------- Expand items ---------- */
+  (function () {
+    document.querySelectorAll('.expand-items-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var targetId = btn.dataset.target;
+        var container = document.getElementById(targetId);
+        if (!container) return;
+        var extra = container.querySelector('.held-extra');
+        if (!extra) return;
+        var isHidden = extra.classList.contains('hidden');
+        extra.classList.toggle('hidden');
+        btn.textContent = isHidden ? 'Show fewer' : ('Show all ' + (container.querySelectorAll('li').length) + ' items');
+        // Simpler: toggle text
+        if (isHidden) {
+          btn.textContent = 'Show fewer';
+        } else {
+          btn.textContent = 'Show all items';
+        }
+      });
+    });
+  })();
+
+  /* ---------- Resume confirmation for stale orders ---------- */
+  (function () {
+    document.querySelectorAll('.resume-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        if (btn.dataset.stale === 'true') {
+          if (!confirm('This order has been parked for over 24 hours. Resume anyway?')) {
+            e.preventDefault();
+          }
+        }
+      });
+    });
+  })();
+
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-held-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+
+      function done() { showToast('Order summary copied'); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

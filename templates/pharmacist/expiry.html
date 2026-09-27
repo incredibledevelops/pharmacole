@@ -9,7 +9,9 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Expiry Tracker</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">Medicines grouped by time-to-expiry</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        Medicines grouped by time-to-expiry · <span id="hdrCount" aria-live="polite">{{ (buckets['30']|length) + (buckets['60']|length) + (buckets['90']|length) }}</span> items
+      </p>
     </div>
   </div>
   <button onclick="window.print()"
@@ -21,27 +23,246 @@
 <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 animate-fade-in">
 
   {% set all_total = (buckets['30']|length) + (buckets['60']|length) + (buckets['90']|length) %}
+  {% set urgent_value = (buckets['30']|map(attribute='selling_price')|list|length > 0)
+    and (buckets['30']|sum(attribute='selling_price') if false else 0) or 0 %}
 
-  <!-- Summary -->
-  <div class="grid grid-cols-3 gap-3 sm:gap-4">
-    <div class="bg-gradient-to-br from-rose-50 to-white rounded-2xl p-4 shadow-sm border border-rose-100/60">
-      <p class="text-[11px] text-rose-600 uppercase tracking-wide font-semibold">≤ 30 days</p>
-      <p class="text-2xl sm:text-3xl font-extrabold text-rose-600 mt-1">{{ buckets['30']|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Urgent</p>
+  {% if all_total > 0 %}
+
+  <!-- Stats strip -->
+  {% set urgent_count = buckets['30']|length %}
+  {% set soon_count = buckets['60']|length %}
+  {% set monitor_count = buckets['90']|length %}
+
+  {% set urgent_value = [] %}
+  {% for i in buckets['30'] %}{% set _ = urgent_value.append(i.selling_price * i.quantity) %}{% endfor %}
+
+  {% set soon_value = [] %}
+  {% for i in buckets['60'] %}{% set _ = soon_value.append(i.selling_price * i.quantity) %}{% endfor %}
+
+  {% set monitor_value = [] %}
+  {% for i in buckets['90'] %}{% set _ = monitor_value.append(i.selling_price * i.quantity) %}{% endfor %}
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total expiring</p>
+          <i class="fas fa-hourglass-half text-rose-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ all_total }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Across all windows</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
-      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">31 – 60 days</p>
-      <p class="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{{ buckets['60']|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Plan ahead</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Urgent ≤30d</p>
+          <i class="fas fa-triangle-exclamation text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ urgent_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Act now</p>
+      </div>
     </div>
-    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
-      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">61 – 90 days</p>
-      <p class="text-2xl sm:text-3xl font-extrabold text-gray-700 mt-1">{{ buckets['90']|length }}</p>
-      <p class="text-[11px] text-gray-400 mt-1">Monitor</p>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Value ≤30d</p>
+          <i class="fas fa-coins text-primary text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-primary mt-1 truncate">{{ urgent_value|sum|ghs }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">At risk</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total at risk</p>
+          <i class="fas fa-chart-line text-blue-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-blue-600 mt-1 truncate">
+          {{ (urgent_value|sum + soon_value|sum + monitor_value|sum)|ghs }}
+        </p>
+        <p class="text-[11px] text-gray-400 mt-0.5">All windows</p>
+      </div>
     </div>
   </div>
 
-  {% if all_total == 0 %}
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Expiry filters">
+        <button data-filter="all" class="exp-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ all_total }}</span>
+        </button>
+        <button data-filter="rose" class="exp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-rose-500"></i> Urgent <span class="ml-0.5 text-gray-400">{{ urgent_count }}</span>
+        </button>
+        <button data-filter="amber" class="exp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-clock mr-1 text-[10px] text-amber-500"></i> Soon <span class="ml-0.5 text-gray-400">{{ soon_count }}</span>
+        </button>
+        <button data-filter="gray" class="exp-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-hourglass-half mr-1 text-[10px] text-gray-500"></i> Monitor <span class="ml-0.5 text-gray-400">{{ monitor_count }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="expSearch" placeholder="Search drug or SKU…" autocomplete="off"
+            aria-label="Search expiring items"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="expSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="expSort" aria-label="Sort expiring items"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="default">Sort</option>
+            <option value="expiry">Expiry (soonest)</option>
+            <option value="value-desc">Value (high → low)</option>
+            <option value="name">Name (A–Z)</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% set buckets_list = [
+    ('30 days', buckets['30'], 'rose',  'fa-triangle-exclamation', 'Urgent — remove or return soon'),
+    ('31 – 60 days', buckets['60'], 'amber', 'fa-clock',                'Plan promotions or returns'),
+    ('61 – 90 days', buckets['90'], 'gray',  'fa-hourglass-half',       'Monitor and rotate stock')
+  ] %}
+
+  <div id="expBuckets" class="space-y-5">
+    {% for label, items, tone, icon, sub in buckets_list %}
+    <div class="exp-bucket bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden" data-tone="{{ tone }}">
+
+      <button type="button"
+        class="w-full text-left px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition
+          {% if tone == 'rose' %}bg-gradient-to-r from-rose-50 to-white hover:from-rose-100/60
+          {% elif tone == 'amber' %}bg-gradient-to-r from-amber-50 to-white hover:from-amber-100/60
+          {% else %}bg-gradient-to-r from-gray-50 to-white hover:from-gray-100/60{% endif %}"
+        aria-expanded="true" aria-controls="bucket-{{ tone }}">
+
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+            {% if tone == 'rose' %}bg-rose-100 text-rose-600
+            {% elif tone == 'amber' %}bg-amber-100 text-amber-600
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            <i class="fas {{ icon }}"></i>
+          </span>
+          <div class="min-w-0">
+            <h3 class="font-semibold flex items-center gap-2
+              {% if tone == 'rose' %}text-rose-700{% elif tone == 'amber' %}text-amber-700{% else %}text-gray-700{% endif %}">
+              Expiring in {{ label }}
+              <i class="fas fa-chevron-down text-[10px] opacity-60 transition-transform duration-300 toggle-chevron"></i>
+            </h3>
+            <p class="text-[11px] text-gray-400">{{ sub }}</p>
+          </div>
+        </div>
+
+        <span class="self-start sm:self-center text-xs px-3 py-1 rounded-full font-semibold whitespace-nowrap
+          {% if tone == 'rose' %}bg-rose-200 text-rose-800
+          {% elif tone == 'amber' %}bg-amber-200 text-amber-800
+          {% else %}bg-gray-200 text-gray-700{% endif %}">
+          {{ items|length }} item{{ '' if items|length == 1 else 's' }}
+        </span>
+      </button>
+
+      <div id="bucket-{{ tone }}" class="bucket-content">
+        {% if items %}
+        <div class="divide-y divide-gray-100">
+          {% for i in items %}
+          {% set d = i.expiry_date|days_until %}
+          <div class="exp-row p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/70 transition"
+            data-search="{{ (i.name ~ ' ' ~ i.sku)|lower|e }}"
+            data-name="{{ i.name|e }}"
+            data-value="{{ i.selling_price * i.quantity }}"
+            data-expiry="{{ i.expiry_date.isoformat() if i.expiry_date else '' }}">
+
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
+                {% if tone == 'rose' %}bg-rose-50 text-rose-600
+                {% elif tone == 'amber' %}bg-amber-50 text-amber-600
+                {% else %}bg-gray-50 text-gray-600{% endif %}">
+                <i class="fas fa-capsules"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="font-semibold text-gray-800 truncate">{{ i.name }}</p>
+                <div class="flex items-center gap-1.5 mt-0.5 group/sku">
+                  <p class="text-xs text-gray-400 truncate font-mono">
+                    SKU: {{ i.sku }}{% if i.batch_number %} · Batch: {{ i.batch_number }}{% endif %}
+                  </p>
+                  <button type="button"
+                    class="copy-sku-btn opacity-0 group-hover/sku:opacity-100 text-gray-400 hover:text-primary p-0.5 rounded transition"
+                    data-sku="{{ i.sku|e }}" title="Copy SKU" aria-label="Copy SKU">
+                    <i class="fas fa-copy text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 sm:gap-6 text-sm flex-shrink-0 sm:pl-0 pl-13">
+              <div>
+                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Quantity</p>
+                <p class="font-semibold text-gray-800">{{ i.quantity }}</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Expiry</p>
+                <p class="font-semibold
+                  {% if tone == 'rose' %}text-rose-600{% elif tone == 'amber' %}text-amber-600{% else %}text-gray-700{% endif %}">
+                  {{ i.expiry_date|nice_date }}
+                </p>
+                <p class="text-[10px] mt-0.5
+                  {% if d <= 0 %}text-rose-500{% elif d <= 30 %}text-rose-500{% elif d <= 60 %}text-amber-500{% else %}text-gray-400{% endif %}">
+                  {% if d < 0 %}{{ -d }}d ago{% elif d == 0 %}today{% else %}in {{ d }}d{% endif %}
+                </p>
+              </div>
+              <div>
+                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Value</p>
+                <p class="font-semibold text-primary whitespace-nowrap">{{ (i.selling_price * i.quantity)|ghs }}</p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-gray-400 text-sm" role="status">
+          <i class="fas fa-circle-check text-xl mb-2 block text-emerald-400"></i>
+          No items expiring in this window.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- No results (search/filter) -->
+  <div id="expNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+    <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+      <i class="fas fa-search text-2xl text-gray-300"></i>
+    </div>
+    <p class="font-medium text-gray-500">No items match your filters</p>
+    <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+    <button type="button" onclick="clearExpFilters()"
+      class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+      <i class="fas fa-rotate-left text-xs"></i> Clear filters
+    </button>
+  </div>
+
+  {% else %}
+
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
     <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-4">
       <i class="fas fa-circle-check text-3xl text-emerald-500"></i>
@@ -49,91 +270,195 @@
     <p class="text-gray-700 font-semibold text-lg">All clear</p>
     <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">No medicines are expiring in the next 90 days. Keep up the great stock rotation!</p>
   </div>
-  {% else %}
-
-  {% set buckets_list = [
-    ('30 days', buckets['30'], 'rose',  'fa-triangle-exclamation', 'Urgent — remove or return soon'),
-    ('60 days', buckets['60'], 'amber', 'fa-clock',                'Plan promotions or returns'),
-    ('90 days', buckets['90'], 'gray',  'fa-hourglass-half',       'Monitor and rotate stock')
-  ] %}
-
-  {% for label, items, tone, icon, sub in buckets_list %}
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2
-      {% if tone == 'rose' %}bg-gradient-to-r from-rose-50 to-white
-      {% elif tone == 'amber' %}bg-gradient-to-r from-amber-50 to-white
-      {% else %}bg-gradient-to-r from-gray-50 to-white{% endif %}">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
-          {% if tone == 'rose' %}bg-rose-100 text-rose-600
-          {% elif tone == 'amber' %}bg-amber-100 text-amber-600
-          {% else %}bg-gray-100 text-gray-600{% endif %}">
-          <i class="fas {{ icon }}"></i>
-        </span>
-        <div class="min-w-0">
-          <h3 class="font-semibold
-            {% if tone == 'rose' %}text-rose-700{% elif tone == 'amber' %}text-amber-700{% else %}text-gray-700{% endif %}">
-            Expiring in {{ label }}
-          </h3>
-          <p class="text-[11px] text-gray-400">{{ sub }}</p>
-        </div>
-      </div>
-      <span class="self-start sm:self-center text-xs px-3 py-1 rounded-full font-semibold whitespace-nowrap
-        {% if tone == 'rose' %}bg-rose-200 text-rose-800
-        {% elif tone == 'amber' %}bg-amber-200 text-amber-800
-        {% else %}bg-gray-200 text-gray-700{% endif %}">
-        {{ items|length }} item{{ '' if items|length == 1 else 's' }}
-      </span>
-    </div>
-
-    {% if items %}
-    <div class="divide-y divide-gray-100">
-      {% for i in items %}
-      <div class="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/70 transition">
-        <div class="flex items-start gap-3 min-w-0 flex-1">
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-            {% if tone == 'rose' %}bg-rose-50 text-rose-600
-            {% elif tone == 'amber' %}bg-amber-50 text-amber-600
-            {% else %}bg-gray-50 text-gray-600{% endif %}">
-            <i class="fas fa-capsules"></i>
-          </div>
-          <div class="min-w-0">
-            <p class="font-semibold text-gray-800 truncate">{{ i.name }}</p>
-            <p class="text-xs text-gray-400 truncate mt-0.5 font-mono">
-              SKU: {{ i.sku }}{% if i.batch_number %} · Batch: {{ i.batch_number }}{% endif %}
-            </p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-4 sm:gap-6 text-sm flex-shrink-0 pl-13 sm:pl-0">
-          <div>
-            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Quantity</p>
-            <p class="font-semibold text-gray-800">{{ i.quantity }}</p>
-          </div>
-          <div>
-            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Expiry</p>
-            <p class="font-semibold
-              {% if tone == 'rose' %}text-rose-600{% elif tone == 'amber' %}text-amber-600{% else %}text-gray-700{% endif %}">
-              {{ i.expiry_date|nice_date }}
-            </p>
-          </div>
-          <div>
-            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Value</p>
-            <p class="font-semibold text-primary whitespace-nowrap">{{ (i.selling_price * i.quantity)|ghs }}</p>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="p-8 text-center text-gray-400 text-sm">
-      <i class="fas fa-circle-check text-xl mb-2 block text-emerald-400"></i>
-      No items expiring in this window.
-    </div>
-    {% endif %}
-  </div>
-  {% endfor %}
 
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* ---------- Filter + Search + Sort ---------- */
+  var activeTone = 'all';
+
+  function apply() {
+    var search = document.getElementById('expSearch');
+    var noResults = document.getElementById('expNoResults');
+    var hdrCount = document.getElementById('hdrCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var totalVisible = 0;
+
+    document.querySelectorAll('.exp-bucket').forEach(function (bucket) {
+      var tone = bucket.dataset.tone;
+      var bucketMatchesFilter = (activeTone === 'all' || activeTone === tone);
+      var visibleInBucket = 0;
+
+      bucket.querySelectorAll('.exp-row').forEach(function (row) {
+        var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
+        var show = bucketMatchesFilter && ms;
+        row.style.display = show ? '' : 'none';
+        if (show) visibleInBucket++;
+      });
+
+      // Hide entire bucket if filter mismatch OR no matching rows
+      bucket.style.display = (bucketMatchesFilter && (visibleInBucket > 0 || !q)) ? '' : 'none';
+      totalVisible += visibleInBucket;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', totalVisible > 0);
+    if (hdrCount) hdrCount.textContent = totalVisible;
+  }
+
+  function sortRows(mode) {
+    document.querySelectorAll('.exp-bucket .bucket-content').forEach(function (container) {
+      var rows = Array.from(container.querySelectorAll('.exp-row'));
+      if (!rows.length) return;
+      rows.sort(function (a, b) {
+        function num(v) { return parseFloat(v) || 0; }
+        switch (mode) {
+          case 'expiry': return (a.dataset.expiry || '').localeCompare(b.dataset.expiry || '');
+          case 'value-desc': return num(b.dataset.value) - num(a.dataset.value);
+          case 'name': return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+          default: return 0;
+        }
+      });
+      rows.forEach(function (r) { container.appendChild(r); });
+    });
+  }
+
+  function clearExpFilters() {
+    activeTone = 'all';
+    document.querySelectorAll('.exp-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.exp-chip[data-filter="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('expSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('expSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('expSort');
+    if (sortSel) sortSel.value = 'default';
+    sortRows('default');
+    apply();
+  }
+
+  /* ---------- Wire up ---------- */
+  (function () {
+    var search = document.getElementById('expSearch');
+    var searchClear = document.getElementById('expSearchClear');
+    var sortSel = document.getElementById('expSort');
+
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      apply();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        apply();
+      });
+    }
+
+    document.querySelectorAll('.exp-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.exp-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeTone = chip.dataset.filter;
+        apply();
+      });
+    });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortRows(this.value); });
+
+    // Bucket collapse toggle
+    document.querySelectorAll('.exp-bucket > button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var content = btn.nextElementSibling;
+        if (!content) return;
+        var isOpen = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!isOpen));
+        content.style.display = isOpen ? 'none' : '';
+        var chevron = btn.querySelector('.toggle-chevron');
+        if (chevron) chevron.style.transform = isOpen ? 'rotate(-90deg)' : '';
+      });
+    });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+  })();
+
+  /* ---------- Copy SKU + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-sku-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var sku = btn.dataset.sku || '';
+      if (!sku) return;
+
+      function done() { showToast('SKU copied: ' + sku); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(sku).then(done).catch(function () {
+          fallbackCopy(sku); done();
+        });
+      } else {
+        fallbackCopy(sku); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
+  })();
+</script>
 {% endblock %}

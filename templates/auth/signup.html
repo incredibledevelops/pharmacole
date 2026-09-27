@@ -43,11 +43,21 @@
       </div>
 
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">Register your pharmacy</h1>
-      <p class="text-sm text-gray-500 mb-6">
+      <p class="text-sm text-gray-500 mb-5">
         <span class="font-semibold text-gray-700">GH₵ 500/month</span> · No trial · Dashboard activates immediately after payment.
       </p>
 
-      <form method="POST" action="{{ url_for('auth.signup') }}" class="grid md:grid-cols-2 gap-4" novalidate id="signupForm">
+      <!-- Live progress bar -->
+      <div class="mb-6 flex items-center gap-3" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0" id="formProgressWrap">
+        <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div id="formProgressFill" class="h-full bg-gradient-to-r from-primary to-primaryLight rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <p class="text-[11px] font-semibold text-gray-500 whitespace-nowrap">
+          <span id="formProgressText">0 / 4</span> required
+        </p>
+      </div>
+
+      <form method="POST" action="{{ url_for('auth.signup') }}" class="grid md:grid-cols-2 gap-4" novalidate id="signupForm" autocomplete="on">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <!-- Pharmacy name -->
@@ -59,8 +69,10 @@
             <i class="fas fa-store absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="pharmacy_name" name="pharmacy_name" required placeholder="GreenHealth Pharmacy"
               value="{{ form.get('pharmacy_name','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="organization"
+              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i class="field-check hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm" data-for="pharmacy_name"></i>
           </div>
         </div>
 
@@ -73,8 +85,10 @@
             <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="owner_name" name="owner_name" required placeholder="Ama Mensah"
               value="{{ form.get('owner_name','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="name"
+              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i class="field-check hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm" data-for="owner_name"></i>
           </div>
         </div>
 
@@ -87,9 +101,12 @@
             <i class="fas fa-phone absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="phone" name="phone" type="tel" placeholder="+233 24 000 0000"
               value="{{ form.get('phone','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="tel"
+              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i class="field-check hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm" data-for="phone"></i>
           </div>
+          <p id="phoneHint" class="text-[11px] text-gray-400 mt-1">Accept local or international format.</p>
         </div>
 
         <!-- Email -->
@@ -101,8 +118,10 @@
             <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="email" name="email" type="email" required placeholder="owner@greenhealth.com"
               value="{{ form.get('email','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false"
+              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i class="field-check hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm" data-for="email"></i>
           </div>
         </div>
 
@@ -115,6 +134,7 @@
             <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="address" name="address" placeholder="123 Health Avenue, Accra"
               value="{{ form.get('address','') }}"
+              autocomplete="street-address"
               class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
           </div>
@@ -141,7 +161,22 @@
           <div class="mt-2 h-1 rounded-full bg-gray-100 overflow-hidden">
             <div id="pwdStrength" class="h-full w-0 bg-rose-400 transition-all duration-300"></div>
           </div>
-          <p id="pwdHint" class="text-[11px] text-gray-400 mt-1">Use 8+ characters with letters & numbers.</p>
+
+          <!-- Live password checklist -->
+          <ul class="mt-2 space-y-1 text-[11px] text-gray-400" id="pwdChecklist" aria-live="polite">
+            <li data-check="len" class="flex items-center gap-1.5">
+              <i class="fas fa-circle-xmark text-gray-300"></i>
+              <span>At least 8 characters</span>
+            </li>
+            <li data-check="mix" class="flex items-center gap-1.5">
+              <i class="fas fa-circle-xmark text-gray-300"></i>
+              <span>Letters and numbers</span>
+            </li>
+            <li data-check="strong" class="flex items-center gap-1.5">
+              <i class="fas fa-circle-xmark text-gray-300"></i>
+              <span>A symbol makes it stronger</span>
+            </li>
+          </ul>
         </div>
 
         <!-- Confirm password -->
@@ -162,20 +197,25 @@
               <i class="fas fa-eye text-sm"></i>
             </button>
           </div>
-          <p id="matchHint" class="text-[11px] mt-2 h-4"></p>
+          <p id="matchHint" class="text-[11px] mt-2 h-4 flex items-center gap-1" aria-live="polite"></p>
         </div>
 
         <!-- Terms + Submit -->
         <div class="md:col-span-2 mt-2">
-          <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer select-none mb-4">
-            <input type="checkbox" required
-              class="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40">
-            <span>I agree to the <a href="#" class="text-primary font-medium hover:underline">Terms</a> and <a href="#" class="text-primary font-medium hover:underline">Privacy Policy</a>.</span>
+          <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer select-none mb-4 group">
+            <input type="checkbox" id="termsCheck" required
+              class="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer">
+            <span>
+              I agree to the
+              <a href="#" class="text-primary font-medium hover:underline">Terms</a>
+              and
+              <a href="#" class="text-primary font-medium hover:underline">Privacy Policy</a>.
+            </span>
           </label>
 
           <button type="submit" id="signupBtn"
             class="btn-primary w-full bg-primary hover:bg-primaryLight text-white font-bold py-3.5 rounded-xl shadow-md
-                   flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                   flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99] transition">
             <span id="signupBtnLabel" class="inline-flex items-center gap-2">
               <i class="fas fa-arrow-right"></i> Continue to payment
             </span>
@@ -196,7 +236,7 @@
 </div>
 
 <script>
-  // Toggle password visibility
+  /* ---------- Toggle password visibility ---------- */
   function togglePwd(id, btn) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -207,15 +247,45 @@
   }
 
   (function () {
-    var pwd = document.getElementById('password');
-    var confirm = document.getElementById('confirm_password');
-    var bar = document.getElementById('pwdStrength');
-    var hint = document.getElementById('pwdHint');
-    var match = document.getElementById('matchHint');
+    /* ---------- Element references ---------- */
     var form = document.getElementById('signupForm');
     var btn = document.getElementById('signupBtn');
     var label = document.getElementById('signupBtnLabel');
+    var pwd = document.getElementById('password');
+    var confirm = document.getElementById('confirm_password');
+    var bar = document.getElementById('pwdStrength');
+    var match = document.getElementById('matchHint');
+    var progressWrap = document.getElementById('formProgressWrap');
+    var progressFill = document.getElementById('formProgressFill');
+    var progressText = document.getElementById('formProgressText');
 
+    var REQUIRED_IDS = ['pharmacy_name', 'owner_name', 'email', 'password'];
+    var DRAFT_KEY = 'pharmacole_signup_draft';
+
+    /* ---------- Progress tracking ---------- */
+    function updateProgress() {
+      var done = 0;
+      REQUIRED_IDS.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.value && el.value.trim() !== '') done++;
+      });
+      var pct = (done / REQUIRED_IDS.length) * 100;
+      if (progressFill) progressFill.style.width = pct + '%';
+      if (progressText) progressText.textContent = done + ' / ' + REQUIRED_IDS.length;
+      if (progressWrap) progressWrap.setAttribute('aria-valuenow', String(done));
+
+      if (progressFill) {
+        if (done === REQUIRED_IDS.length) {
+          progressFill.classList.remove('from-primary', 'to-primaryLight');
+          progressFill.classList.add('from-emerald-500', 'to-emerald-400');
+        } else {
+          progressFill.classList.add('from-primary', 'to-primaryLight');
+          progressFill.classList.remove('from-emerald-500', 'to-emerald-400');
+        }
+      }
+    }
+
+    /* ---------- Password strength + checklist ---------- */
     function score(p) {
       var s = 0;
       if (!p) return 0;
@@ -227,7 +297,8 @@
     }
 
     function updateStrength() {
-      var s = score(pwd.value);
+      var v = pwd.value;
+      var s = score(v);
       var map = [
         { w: '0%',  c: 'bg-rose-400',    t: 'Too weak' },
         { w: '25%', c: 'bg-rose-400',    t: 'Weak' },
@@ -237,31 +308,157 @@
       ][s];
       bar.style.width = map.w;
       bar.className = 'h-full transition-all duration-300 ' + map.c;
-      hint.textContent = pwd.value ? map.t : 'Use 8+ characters with letters & numbers.';
-      hint.className = 'text-[11px] mt-1 ' +
-        (s >= 3 ? 'text-emerald-600' : s >= 2 ? 'text-amber-600' : 'text-gray-400');
+
+      // Checklist
+      var items = document.querySelectorAll('#pwdChecklist [data-check]');
+      items.forEach(function (li) {
+        var key = li.dataset.check;
+        var pass = false;
+        var icon = li.querySelector('i');
+        if (key === 'len') pass = v.length >= 8;
+        else if (key === 'mix') pass = /[A-Za-z]/.test(v) && /\d/.test(v);
+        else if (key === 'strong') pass = /[^A-Za-z0-9]/.test(v) && v.length >= 8;
+
+        if (pass) {
+          icon.className = 'fas fa-circle-check text-emerald-500';
+          li.classList.add('text-emerald-700');
+          li.classList.remove('text-gray-400');
+        } else {
+          icon.className = 'fas fa-circle-xmark text-gray-300';
+          li.classList.add('text-gray-400');
+          li.classList.remove('text-emerald-700');
+        }
+      });
     }
 
     function updateMatch() {
-      if (!confirm.value) { match.textContent = ''; return; }
+      if (!confirm.value) {
+        match.innerHTML = '';
+        return;
+      }
       if (confirm.value === pwd.value) {
-        match.textContent = 'Passwords match';
-        match.className = 'text-[11px] mt-2 h-4 text-emerald-600';
+        match.innerHTML = '<i class="fas fa-circle-check text-emerald-500"></i> Passwords match';
+        match.className = 'text-[11px] mt-2 h-4 flex items-center gap-1 text-emerald-600';
       } else {
-        match.textContent = 'Passwords do not match';
-        match.className = 'text-[11px] mt-2 h-4 text-rose-500';
+        match.innerHTML = '<i class="fas fa-circle-xmark text-rose-500"></i> Passwords do not match';
+        match.className = 'text-[11px] mt-2 h-4 flex items-center gap-1 text-rose-500';
       }
     }
 
-    if (pwd) pwd.addEventListener('input', function () { updateStrength(); updateMatch(); });
+    /* ---------- Field-level validation ticks ---------- */
+    var validators = {
+      pharmacy_name: function (v) { return v.trim().length >= 2; },
+      owner_name: function (v) { return v.trim().length >= 2; },
+      email: function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()); },
+      phone: function (v) { return !v || /^\+?[\d\s-]{7,}$/.test(v.trim()); }
+    };
+
+    Object.keys(validators).forEach(function (id) {
+      var el = document.getElementById(id);
+      var tick = document.querySelector('.field-check[data-for="' + id + '"]');
+      if (!el || !tick) return;
+      el.addEventListener('input', function () {
+        if (validators[id](el.value)) {
+          tick.classList.remove('hidden');
+          el.classList.remove('border-rose-300');
+          el.classList.add('border-emerald-200');
+        } else {
+          tick.classList.add('hidden');
+          el.classList.remove('border-emerald-200');
+        }
+      });
+      el.addEventListener('blur', function () {
+        if (el.value && !validators[id](el.value)) {
+          el.classList.add('border-rose-300');
+        } else {
+          el.classList.remove('border-rose-300');
+        }
+      });
+    });
+
+    /* ---------- Phone normalisation ---------- */
+    var phone = document.getElementById('phone');
+    if (phone) {
+      phone.addEventListener('blur', function () {
+        var v = phone.value.trim().replace(/\s+/g, ' ');
+        if (!v) return;
+        // Ghana local format: 0XXXXXXXXX → +233XXXXXXXXX
+        var digits = v.replace(/\D/g, '');
+        if (/^0\d{9}$/.test(digits)) {
+          phone.value = '+233 ' + digits.slice(1, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6);
+        } else if (/^233\d{9}$/.test(digits)) {
+          phone.value = '+233 ' + digits.slice(3, 5) + ' ' + digits.slice(5, 8) + ' ' + digits.slice(8);
+        } else {
+          phone.value = v;
+        }
+      });
+    }
+
+    /* ---------- Draft auto-save ---------- */
+    var DRAFT_FIELDS = ['pharmacy_name', 'owner_name', 'phone', 'email', 'address'];
+
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        DRAFT_FIELDS.forEach(function (f) {
+          var el = form.querySelector('[name="' + f + '"]');
+          if (el && !el.value && data[f]) el.value = data[f];
+        });
+        updateProgress();
+      }
+    } catch (e) {}
+
+    form.addEventListener('input', function () {
+      try {
+        var data = {};
+        DRAFT_FIELDS.forEach(function (f) {
+          var el = form.querySelector('[name="' + f + '"]');
+          if (el) data[f] = el.value;
+        });
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+      } catch (e) {}
+    });
+
+    form.addEventListener('submit', function () {
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    });
+
+    /* ---------- Wire up ---------- */
+    if (pwd) pwd.addEventListener('input', function () { updateStrength(); updateMatch(); updateProgress(); });
     if (confirm) confirm.addEventListener('input', updateMatch);
 
+    ['pharmacy_name', 'owner_name', 'email'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateProgress);
+    });
+
+    /* ---------- Submit loading ---------- */
     if (form) {
-      form.addEventListener('submit', function () {
+      form.addEventListener('submit', function (e) {
+        if (!form.checkValidity()) return;
         btn.disabled = true;
         label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Creating your workspace…';
       });
     }
+
+    /* ---------- Unsaved changes guard ---------- */
+    var dirty = false;
+    form.addEventListener('input', function () { dirty = true; });
+    form.addEventListener('submit', function () { dirty = false; });
+    window.addEventListener('beforeunload', function (e) {
+      if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    /* ---------- Auto-focus first field ---------- */
+    setTimeout(function () {
+      var first = document.getElementById('pharmacy_name');
+      if (first && !first.value) first.focus();
+    }, 150);
+
+    /* ---------- Initial paint ---------- */
+    updateProgress();
+    updateStrength();
   })();
 </script>
 

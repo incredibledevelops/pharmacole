@@ -46,13 +46,23 @@
           </span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Activate your pharmacy</h1>
-        <p class="text-sm text-gray-500 mt-1 truncate px-2">
-          {{ tenant.pharmacy_name }} · <span class="font-mono text-primary font-semibold">{{ tenant.tenant_code }}</span>
-        </p>
+        <div class="text-sm text-gray-500 mt-1 inline-flex items-center gap-1.5 px-2 justify-center flex-wrap">
+          <span class="truncate max-w-[200px]">{{ tenant.pharmacy_name }}</span>
+          <span class="text-gray-300">·</span>
+          <span class="inline-flex items-center gap-1">
+            <span class="font-mono text-primary font-semibold">{{ tenant.tenant_code }}</span>
+            <button type="button" id="copyTenantBtn"
+              class="text-gray-400 hover:text-primary transition p-1 rounded"
+              data-copy="{{ tenant.tenant_code|e }}"
+              title="Copy tenant code" aria-label="Copy tenant code">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+          </span>
+        </div>
       </div>
 
       <!-- Summary card -->
-      <div class="bg-gradient-to-br from-gray-50 to-teal-50/40 rounded-2xl p-5 mb-6 border border-gray-100">
+      <div class="bg-gradient-to-br from-gray-50 to-teal-50/40 rounded-2xl p-5 mb-5 border border-gray-100">
         <div class="flex justify-between text-sm mb-2.5">
           <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-crown text-accent text-xs"></i> Plan</span>
           <span class="font-semibold text-gray-800">Pharmacy Pro · Monthly</span>
@@ -74,20 +84,59 @@
         </div>
       </div>
 
+      <!-- Payment methods row -->
+      <div class="mb-5">
+        <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 text-center">
+          Payment methods accepted
+        </p>
+        <div class="flex items-center justify-center gap-2 flex-wrap">
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+            <i class="fas fa-credit-card text-blue-500"></i> Card
+          </span>
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+            <i class="fas fa-mobile-alt text-purple-500"></i> Mobile Money
+          </span>
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+            <i class="fas fa-university text-emerald-500"></i> Bank
+          </span>
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
+            <i class="fas fa-hashtag text-amber-500"></i> USSD
+          </span>
+        </div>
+      </div>
+
       <!-- Pay button -->
       <button id="payBtn" type="button" aria-busy="false"
         class="btn-primary w-full bg-primary hover:bg-primaryLight disabled:opacity-60 disabled:cursor-not-allowed
                text-white font-bold py-4 rounded-xl shadow-md
-               flex items-center justify-center gap-2">
+               flex items-center justify-center gap-2 active:scale-[0.99] transition">
         <i class="fas fa-lock"></i>
         <span id="payBtnLabel">Pay GH₵ {{ "%.2f"|format(amount) }} with Paystack</span>
       </button>
+
+      <!-- Session indicator -->
+      <p class="text-[10px] text-gray-400 text-center mt-3 inline-flex w-full items-center justify-center gap-1.5">
+        <span class="relative flex h-1.5 w-1.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+        </span>
+        Secure HTTPS session · Token valid for 15 minutes
+      </p>
+
+      <!-- Timer indicator -->
+      <div id="payTimer" class="hidden mt-3 text-[11px] text-gray-500 text-center inline-flex w-full items-center justify-center gap-1.5">
+        <i class="fas fa-clock text-primary"></i>
+        <span>Waiting for payment… <span id="payTimerSeconds" class="font-mono font-semibold text-gray-700">0s</span></span>
+      </div>
 
       <!-- Error alert -->
       <div id="payError" role="alert" aria-live="polite"
         class="hidden mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3 items-start gap-2">
         <i class="fas fa-exclamation-circle mt-0.5"></i>
-        <span id="payErrorMsg" class="flex-1"></span>
+        <div class="flex-1">
+          <p id="payErrorMsg" class="font-medium"></p>
+          <p id="payErrorHint" class="text-[11px] mt-1 opacity-80"></p>
+        </div>
         <button type="button" class="opacity-70 hover:opacity-100 transition -mr-1 -mt-1 p-1 rounded"
           aria-label="Dismiss error"
           onclick="document.getElementById('payError').classList.add('hidden');document.getElementById('payError').classList.remove('flex');">
@@ -96,11 +145,24 @@
       </div>
 
       <!-- Trust row -->
-      <div class="flex items-center justify-center gap-4 mt-5 text-[11px] text-gray-400">
+      <div class="flex items-center justify-center gap-4 mt-5 text-[11px] text-gray-400 flex-wrap">
         <span class="inline-flex items-center gap-1"><i class="fas fa-shield-alt text-emerald-500"></i> Paystack secured</span>
         <span class="inline-flex items-center gap-1"><i class="fas fa-ban text-primary"></i> No auto-charge</span>
         <span class="inline-flex items-center gap-1"><i class="fas fa-headset text-primary"></i> Support</span>
       </div>
+
+      <!-- Expandable "Why is this safe?" -->
+      <details class="mt-4 group">
+        <summary class="cursor-pointer text-xs text-primary font-semibold inline-flex items-center gap-1 list-none select-none">
+          <i class="fas fa-chevron-down group-open:rotate-180 transition text-[10px]"></i>
+          Why is this safe?
+        </summary>
+        <div class="mt-2 p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-[11px] text-blue-900 leading-relaxed space-y-1.5">
+          <p><strong>Paystack</strong> processes the payment — Pharmacole never sees your card details.</p>
+          <p><strong>No auto-renewal.</strong> You pay once for 30 days. We never charge you again unless you initiate a new payment.</p>
+          <p><strong>Data is always yours.</strong> If the subscription lapses, your workspace locks but your data stays intact.</p>
+        </div>
+      </details>
 
       <p class="text-xs text-gray-400 text-center mt-4 leading-relaxed">
         By paying, you agree to Pharmacole's subscription terms. You renew manually each month.
@@ -122,6 +184,7 @@
   </div>
 </div>
 
+<!-- Paystack inline -->
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 <script>
@@ -143,14 +206,31 @@
     var label = document.getElementById('payBtnLabel');
     var errBox = document.getElementById('payError');
     var errMsg = document.getElementById('payErrorMsg');
+    var errHint = document.getElementById('payErrorHint');
+    var timerBox = document.getElementById('payTimer');
+    var timerSeconds = document.getElementById('payTimerSeconds');
+    var copyBtn = document.getElementById('copyTenantBtn');
 
-    function showError(msg) {
+    var timerInterval = null;
+    var timerStart = 0;
+
+    /* ---------- Error helper ---------- */
+    function showError(msg, hint) {
       if (!errBox || !errMsg) return;
       errMsg.textContent = msg;
+      if (errHint) errHint.textContent = hint || '';
       errBox.classList.remove('hidden');
       errBox.classList.add('flex');
+      // Bring attention
+      errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function hideError() {
+      if (!errBox) return;
+      errBox.classList.add('hidden');
+      errBox.classList.remove('flex');
     }
 
+    /* ---------- Loading + timer ---------- */
     function setLoading(on, text) {
       if (!btn) return;
       btn.disabled = !!on;
@@ -160,12 +240,90 @@
           ? '<i class="fas fa-circle-notch fa-spin"></i> ' + (text || 'Processing…')
           : 'Pay GH₵ ' + (cfg.amount ? cfg.amount.toFixed(2) : '') + ' with Paystack';
       }
+      if (on) startTimer();
+      else stopTimer();
     }
 
-    // Expose helpers for payment.js
-    window.__pay = { showError: showError, setLoading: setLoading };
+    function startTimer() {
+      if (!timerBox || !timerSeconds) return;
+      timerStart = Date.now();
+      timerBox.classList.remove('hidden');
+      timerBox.classList.add('inline-flex');
+      timerSeconds.textContent = '0s';
+      clearInterval(timerInterval);
+      timerInterval = setInterval(function () {
+        var secs = Math.floor((Date.now() - timerStart) / 1000);
+        timerSeconds.textContent = secs + 's';
+        if (secs === 60) {
+          // Gentle nudge after 1 min
+          showError(
+            'Still waiting for Paystack?',
+            'If the popup was blocked or you closed it, try again. If nothing happened, refresh the page.'
+          );
+        }
+      }, 1000);
+    }
 
-    // Auto-init if payment.js defines initPaymentPage
+    function stopTimer() {
+      clearInterval(timerInterval);
+      if (timerBox) {
+        timerBox.classList.add('hidden');
+        timerBox.classList.remove('inline-flex');
+      }
+    }
+
+    /* ---------- Expose helpers for payment.js ---------- */
+    window.__pay = {
+      showError: showError,
+      hideError: hideError,
+      setLoading: setLoading,
+      stopTimer: stopTimer
+    };
+
+    /* ---------- Copy tenant code ---------- */
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var text = copyBtn.dataset.copy || '';
+        if (!text) return;
+        function done() {
+          var icon = copyBtn.querySelector('i');
+          if (icon) {
+            icon.className = 'fas fa-check text-[10px] text-emerald-500';
+            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400);
+          }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () {
+            fallbackCopy(text); done();
+          });
+        } else {
+          fallbackCopy(text); done();
+        }
+      });
+    }
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
+
+    /* ---------- Keyboard: Enter pays ---------- */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && btn && !btn.disabled && document.activeElement !== document.body) return;
+      if (e.key === 'Enter' && btn && !btn.disabled) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+
+    /* ---------- Auto-init if payment.js defines initPaymentPage ---------- */
     if (typeof window.initPaymentPage === 'function') {
       window.initPaymentPage(cfg);
     }

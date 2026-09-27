@@ -9,32 +9,140 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">All tenants</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">{{ total }} registered pharmacies</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        <span id="hdrCount" aria-live="polite">{{ tenants|length }}</span> of {{ total }} shown
+      </p>
     </div>
   </div>
+
+  <button type="button" onclick="copyVisibleList()"
+    class="hidden sm:inline-flex items-center gap-2 bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition flex-shrink-0"
+    title="Copy visible tenants as text">
+    <i class="fas fa-copy text-primary"></i> Copy list
+  </button>
 </header>
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
   {% if tenants %}
-  <!-- Search -->
-  <div class="mb-5 flex items-center justify-between gap-3">
-    <p class="text-xs text-gray-500 font-medium">
-      <span id="visibleCount">{{ tenants|length }}</span> of {{ total }} shown
-    </p>
-    <div class="relative w-48 sm:w-72">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="tenantSearch" placeholder="Search pharmacy, code, or owner email..."
-        class="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
-    </div>
+
+  {# Compute stats across the currently loaded page #}
+  {% set active_count = tenants|selectattr('subscription_status','equalto','active')|list|length %}
+  {% set pending_count = tenants|selectattr('subscription_status','equalto','pending')|list|length %}
+  {% set expired_count = tenants|length - active_count - pending_count %}
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <button type="button" onclick="setTenantFilter('all')"
+      class="stat-tile text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total</p>
+          <i class="fas fa-building text-blue-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-gray-800 mt-1">{{ total }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Registered pharmacies</p>
+      </div>
+    </button>
+
+    <button type="button" onclick="setTenantFilter('active')"
+      class="stat-tile text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Active</p>
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+        </div>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ active_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">On this page</p>
+      </div>
+    </button>
+
+    <button type="button" onclick="setTenantFilter('pending')"
+      class="stat-tile text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Pending</p>
+          <i class="fas fa-clock text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Awaiting activation</p>
+      </div>
+    </button>
+
+    <button type="button" onclick="setTenantFilter('expired')"
+      class="stat-tile text-left group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Expired</p>
+          <i class="fas fa-lock text-rose-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-rose-500 mt-1">{{ expired_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Needs renewal</p>
+      </div>
+    </button>
   </div>
-  {% endif %}
+
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Tenant status filters">
+        <button data-status="all" class="ten-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ tenants|length }}</span>
+        </button>
+        <button data-status="active" class="ten-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Active <span class="ml-0.5 text-gray-400">{{ active_count }}</span>
+        </button>
+        <button data-status="pending" class="ten-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-clock mr-1 text-[10px] text-amber-500"></i> Pending <span class="ml-0.5 text-gray-400">{{ pending_count }}</span>
+        </button>
+        <button data-status="expired" class="ten-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-lock mr-1 text-[10px] text-rose-500"></i> Expired <span class="ml-0.5 text-gray-400">{{ expired_count }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="tenantSearch" placeholder="Search pharmacy, code, owner… (/)" autocomplete="off"
+            aria-label="Search tenants"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="tenantSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="tenantSort" aria-label="Sort tenants"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="default">Sort</option>
+            <option value="name">Name (A–Z)</option>
+            <option value="expires">Expires soonest</option>
+            <option value="created-desc">Newest</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live count badge -->
+    <p class="text-[11px] text-gray-400 mt-2 sm:mt-0 sm:absolute sm:right-4 sm:top-1/2 sm:-translate-y-1/2 hidden lg:block">
+      <span id="matchCount" class="font-bold text-primary">{{ tenants|length }}</span> match<span id="matchPlural"></span>
+    </p>
+  </div>
 
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
     <!-- Desktop table -->
     <div class="hidden md:block overflow-x-auto table-scroll">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm" id="tenantTable">
         <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
           <tr>
             <th class="px-5 py-3 text-left font-semibold">Pharmacy</th>
@@ -45,38 +153,76 @@
             <th class="px-5 py-3 text-right font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100" id="tenantTableBody">
           {% for t in tenants %}
-          <tr class="tenant-row hover:bg-gray-50/70 transition"
-            data-search="{{ (t.pharmacy_name ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
+          {% set t_status = t.subscription_status or 'expired' %}
+          {% set t_expires_dt = t.subscription_expires_at|as_dt %}
+          {% set days_left = (t_expires_dt - now()).days if t_expires_dt else 0 %}
+          {% set is_expiring_soon = t_status == 'active' and 0 < days_left <= 7 %}
+
+          <tr class="tenant-row hover:bg-gray-50/70 transition cursor-pointer"
+            tabindex="0"
+            data-status="{{ t_status }}"
+            data-name="{{ (t.pharmacy_name or '')|e }}"
+            data-url="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
+            data-expires="{{ t.subscription_expires_at|iso_or_str }}"
+            data-created="{{ t.created_at|iso_or_str }}"
+            data-search="{{ ((t.pharmacy_name or '') ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
+
             <td class="px-5 py-3.5">
               <div class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
                   {{ t.pharmacy_name[:2]|upper if t.pharmacy_name else '??' }}
                 </div>
                 <div class="min-w-0">
-                  <p class="font-semibold text-gray-800 truncate">{{ t.pharmacy_name }}</p>
+                  <p class="font-semibold text-gray-800 truncate tenant-name">{{ t.pharmacy_name }}</p>
                   <p class="text-[11px] text-gray-400 truncate">{{ t.address or '—' }}</p>
                 </div>
               </div>
             </td>
-            <td class="px-5 py-3.5 text-gray-500 font-mono text-xs">{{ t.tenant_code }}</td>
+
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-1.5 group/code">
+                <span class="text-gray-500 font-mono text-xs tenant-code">{{ t.tenant_code }}</span>
+                <button type="button"
+                  class="copy-btn opacity-0 group-hover/code:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                  data-copy="{{ t.tenant_code|e }}" title="Copy tenant code" aria-label="Copy tenant code">
+                  <i class="fas fa-copy text-[10px]"></i>
+                </button>
+              </div>
+            </td>
+
             <td class="px-5 py-3.5 text-gray-600 text-xs truncate max-w-[200px]">{{ t.owner_email }}</td>
+
             <td class="px-5 py-3.5">
               <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
-                {% if t.subscription_status=='active' %}bg-emerald-100 text-emerald-700
-                {% elif t.subscription_status=='pending' %}bg-amber-100 text-amber-700
+                {% if t_status == 'active' %}bg-emerald-100 text-emerald-700
+                {% elif t_status == 'pending' %}bg-amber-100 text-amber-700
                 {% else %}bg-rose-100 text-rose-700{% endif %}">
-                {% if t.subscription_status == 'active' %}
+                {% if t_status == 'active' %}
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
-                {% elif t.subscription_status == 'pending' %}
+                {% elif t_status == 'pending' %}
                   <i class="fas fa-clock text-[9px]"></i> Pending
                 {% else %}
                   <i class="fas fa-lock text-[9px]"></i> Expired
                 {% endif %}
               </span>
+              {% if is_expiring_soon %}
+                <span class="ml-1 text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1 bg-amber-100 text-amber-700">
+                  <i class="fas fa-hourglass-half text-[9px]"></i> Expiring
+                </span>
+              {% endif %}
             </td>
-            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">{{ t.subscription_expires_at|nice_date }}</td>
+
+            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">
+              {{ t.subscription_expires_at|nice_date }}
+              <p class="text-[10px] mt-0.5 {% if days_left <= 7 and t_status == 'active' %}text-amber-600{% elif t_status != 'active' %}text-rose-500{% else %}text-gray-400{% endif %}">
+                {% if t_status == 'active' and days_left > 0 %}in {{ days_left }}d
+                {% elif t_status == 'active' %}today
+                {% else %}—{% endif %}
+              </p>
+            </td>
+
             <td class="px-5 py-3.5 text-right">
               <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
                  class="text-xs text-primary hover:underline font-semibold inline-flex items-center gap-1">
@@ -100,35 +246,70 @@
     </div>
 
     <!-- Mobile list -->
-    <div class="md:hidden divide-y divide-gray-100">
+    <div class="md:hidden divide-y divide-gray-100" id="tenantMobileList">
       {% for t in tenants %}
-      <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
-         class="tenant-row block p-4 hover:bg-gray-50 transition"
-         data-search="{{ (t.pharmacy_name ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
-        <div class="flex items-start gap-3 mb-2">
-          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
+      {% set t_status = t.subscription_status or 'expired' %}
+      {% set t_expires_dt = t.subscription_expires_at|as_dt %}
+      {% set days_left = (t_expires_dt - now()).days if t_expires_dt else 0 %}
+      {% set is_expiring_soon = t_status == 'active' and 0 < days_left <= 7 %}
+
+      <div class="tenant-row p-4"
+        data-status="{{ t_status }}"
+        data-name="{{ (t.pharmacy_name or '')|e }}"
+        data-url="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
+        data-expires="{{ t.subscription_expires_at|iso_or_str }}"
+        data-created="{{ t.created_at|iso_or_str }}"
+        data-search="{{ ((t.pharmacy_name or '') ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
+
+        <div class="flex items-start gap-3">
+          <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
+             class="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
             {{ t.pharmacy_name[:2]|upper if t.pharmacy_name else '??' }}
-          </div>
+          </a>
           <div class="min-w-0 flex-1">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p class="font-semibold text-gray-800 truncate">{{ t.pharmacy_name }}</p>
-                <p class="text-xs text-gray-400 font-mono mt-0.5">{{ t.tenant_code }}</p>
-              </div>
+            <div class="flex items-start justify-between gap-2 mb-1">
+              <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}" class="min-w-0 flex-1">
+                <p class="font-semibold text-gray-800 truncate tenant-name">{{ t.pharmacy_name }}</p>
+              </a>
               <span class="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap flex-shrink-0
-                {% if t.subscription_status=='active' %}bg-emerald-100 text-emerald-700
-                {% elif t.subscription_status=='pending' %}bg-amber-100 text-amber-700
+                {% if t_status == 'active' %}bg-emerald-100 text-emerald-700
+                {% elif t_status == 'pending' %}bg-amber-100 text-amber-700
                 {% else %}bg-rose-100 text-rose-700{% endif %}">
-                {{ t.subscription_status }}
+                {{ t_status|capitalize }}
               </span>
             </div>
-            <p class="text-xs text-gray-500 truncate mt-1">{{ t.owner_email }}</p>
-            <p class="text-[11px] text-gray-400 mt-1 inline-flex items-center gap-1">
-              <i class="fas fa-calendar text-[9px]"></i> Expires {{ t.subscription_expires_at|nice_date }}
-            </p>
+
+            <div class="flex items-center gap-1.5 mb-1">
+              <p class="text-xs text-gray-400 font-mono truncate tenant-code">{{ t.tenant_code }}</p>
+              <button type="button"
+                class="copy-btn text-gray-400 hover:text-primary p-1 rounded transition"
+                data-copy="{{ t.tenant_code|e }}" title="Copy tenant code" aria-label="Copy tenant code">
+                <i class="fas fa-copy text-[10px]"></i>
+              </button>
+            </div>
+
+            <p class="text-xs text-gray-500 truncate">{{ t.owner_email }}</p>
+
+            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+              <p class="text-[11px] text-gray-400 inline-flex items-center gap-1">
+                <i class="fas fa-calendar text-[9px]"></i>
+                Expires {{ t.subscription_expires_at|nice_date }}
+                {% if t_status == 'active' and days_left > 0 %}
+                  <span class="text-gray-300">·</span>
+                  <span class="{% if days_left <= 7 %}text-amber-600 font-semibold{% else %}text-gray-500{% endif %}">
+                    in {{ days_left }}d
+                  </span>
+                {% endif %}
+              </p>
+              {% if is_expiring_soon %}
+                <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700">
+                  Expiring soon
+                </span>
+              {% endif %}
+            </div>
           </div>
         </div>
-      </a>
+      </div>
       {% else %}
       <div class="p-10 text-center text-gray-400">
         <i class="fas fa-building text-3xl mb-2 block text-gray-300"></i>
@@ -136,11 +317,19 @@
       </div>
       {% endfor %}
     </div>
-  </div>
 
-  <div id="tenantNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No tenants match your search.</p>
+    <!-- No results -->
+    <div id="tenantNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+      <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-search text-2xl text-gray-300"></i>
+      </div>
+      <p class="font-medium text-gray-500">No tenants match your filters</p>
+      <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+      <button type="button" onclick="clearTenantFilters()"
+        class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+        <i class="fas fa-rotate-left text-xs"></i> Clear filters
+      </button>
+    </div>
   </div>
 
   {% if has_next or page > 1 %}
@@ -160,28 +349,296 @@
     {% endif %}
   </div>
   {% endif %}
+
+  {% else %}
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-building text-3xl text-primary"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">No tenants registered yet</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Pharmacies will appear here once they sign up on the platform.</p>
+  </div>
+
+  {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-  (function () {
+  /* ---------- Filter / Search / Sort ---------- */
+  var activeTenantStatus = 'all';
+
+  function applyTenantFilters() {
     var search = document.getElementById('tenantSearch');
     var noResults = document.getElementById('tenantNoResults');
-    var visibleCount = document.getElementById('visibleCount');
-    if (!search) return;
+    var hdrCount = document.getElementById('hdrCount');
+    var matchCount = document.getElementById('matchCount');
+    var matchPlural = document.getElementById('matchPlural');
 
-    search.addEventListener('input', function () {
-      var q = this.value.toLowerCase().trim();
-      var visible = 0;
-      document.querySelectorAll('.tenant-row').forEach(function (row) {
-        var match = !q || (row.dataset.search || '').indexOf(q) !== -1;
-        row.style.display = match ? '' : 'none';
-        if (match) visible++;
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+
+    document.querySelectorAll('.tenant-row').forEach(function (row) {
+      var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeTenantStatus === 'all' || row.dataset.status === activeTenantStatus;
+      var show = ms && mf;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (hdrCount) hdrCount.textContent = visible;
+    if (matchCount) matchCount.textContent = visible;
+    if (matchPlural) matchPlural.textContent = visible === 1 ? '' : 'es';
+
+    // Highlight matching text in name/code
+    highlightMatches(q);
+  }
+
+  function highlightMatches(q) {
+    var nameEls = document.querySelectorAll('.tenant-name');
+    var codeEls = document.querySelectorAll('.tenant-code');
+    [nameEls, codeEls].forEach(function (els) {
+      els.forEach(function (el) {
+        var original = el.dataset.original || el.textContent;
+        el.dataset.original = original;
+        if (!q) {
+          el.innerHTML = escapeHtml(original);
+          return;
+        }
+        var lower = original.toLowerCase();
+        var idx = lower.indexOf(q);
+        if (idx === -1) {
+          el.innerHTML = escapeHtml(original);
+          return;
+        }
+        var before = original.slice(0, idx);
+        var match = original.slice(idx, idx + q.length);
+        var after = original.slice(idx + q.length);
+        el.innerHTML = escapeHtml(before) +
+          '<mark class="bg-amber-200 text-gray-900 rounded px-0.5">' + escapeHtml(match) + '</mark>' +
+          escapeHtml(after);
       });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
-      if (visibleCount) visibleCount.textContent = visible;
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function sortTenants(mode) {
+    ['tenantTableBody', 'tenantMobileList'].forEach(function (id) {
+      var container = document.getElementById(id);
+      if (!container) return;
+      var rows = Array.from(container.querySelectorAll('.tenant-row'));
+      if (!rows.length) return;
+      rows.sort(function (a, b) {
+        switch (mode) {
+          case 'name':
+            return (a.dataset.name || '').localeCompare(b.dataset.name || '', undefined, { sensitivity: 'base' });
+          case 'expires':
+            return (a.dataset.expires || '').localeCompare(b.dataset.expires || '');
+          case 'created-desc':
+            return (b.dataset.created || '').localeCompare(a.dataset.created || '');
+          default:
+            return 0;
+        }
+      });
+      rows.forEach(function (r) { container.appendChild(r); });
+    });
+  }
+
+  function setTenantFilter(status) {
+    var chip = document.querySelector('.ten-chip[data-status="' + status + '"]');
+    if (chip) chip.click();
+  }
+
+  function clearTenantFilters() {
+    activeTenantStatus = 'all';
+    document.querySelectorAll('.ten-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.ten-chip[data-status="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('tenantSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('tenantSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('tenantSort');
+    if (sortSel) sortSel.value = 'default';
+    sortTenants('default');
+    applyTenantFilters();
+  }
+
+  /* ---------- Copy visible list ---------- */
+  function copyVisibleList() {
+    var rows = document.querySelectorAll('.tenant-row');
+    var lines = [];
+    rows.forEach(function (row) {
+      if (row.style.display === 'none') return;
+      var nameEl = row.querySelector('.tenant-name');
+      var codeEl = row.querySelector('.tenant-code');
+      var name = nameEl ? (nameEl.dataset.original || nameEl.textContent).trim() : '';
+      var code = codeEl ? (codeEl.dataset.original || codeEl.textContent).trim() : '';
+      var status = row.dataset.status || '';
+      if (name) {
+        lines.push('- ' + name + ' (' + code + ') — ' + status);
+      }
+    });
+
+    if (!lines.length) {
+      showToast('No visible tenants to copy', 'warn');
+      return;
+    }
+
+    var text = 'Pharmacole tenants (' + lines.length + '):\n' + lines.join('\n');
+
+    function done() { showToast('Copied ' + lines.length + ' tenants'); }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopy(text); done();
+      });
+    } else {
+      fallbackCopy(text); done();
+    }
+  }
+
+  /* ---------- Wire up ---------- */
+  (function () {
+    var search = document.getElementById('tenantSearch');
+    var searchClear = document.getElementById('tenantSearchClear');
+    var sortSel = document.getElementById('tenantSort');
+
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      applyTenantFilters();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        applyTenantFilters();
+      });
+    }
+
+    document.querySelectorAll('.ten-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.ten-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeTenantStatus = chip.dataset.status;
+        applyTenantFilters();
+      });
+    });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortTenants(this.value); });
+
+    // Row click → open tenant detail
+    document.querySelectorAll('.tenant-row').forEach(function (row) {
+      row.addEventListener('click', function (e) {
+        if (e.target.closest('.copy-btn') || e.target.closest('a')) return;
+        var url = row.dataset.url;
+        if (url) window.location.href = url;
+      });
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          var url = row.dataset.url;
+          if (url) window.location.href = url;
+        }
+      });
+    });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
     });
   })();
+
+  /* ---------- Copy + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    window.showToast = function (msg, kind) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      var icon = toast.querySelector('i');
+      if (icon) {
+        icon.className = kind === 'warn'
+          ? 'fas fa-exclamation-triangle text-amber-400'
+          : 'fas fa-check-circle text-emerald-400';
+      }
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    };
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+
+      function done() { showToast('Copied: ' + text); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
+  })();
+
+  /* Run initial filters on load to populate the match count */
+  document.addEventListener('DOMContentLoaded', function () {
+    applyTenantFilters();
+  });
 </script>
 {% endblock %}

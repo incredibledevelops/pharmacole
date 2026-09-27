@@ -9,10 +9,12 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Suppliers</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block">Manage vendors that deliver stock</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        Manage vendors · <span id="hdrCount" aria-live="polite">{{ suppliers|length }}</span> total
+      </p>
     </div>
   </div>
-  <button onclick="openModal()" class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0">
+  <button onclick="openModal()" class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0 active:scale-95">
     <i class="fas fa-plus"></i>
     <span class="hidden sm:inline">Add supplier</span>
     <span class="sm:hidden">Add</span>
@@ -22,19 +24,120 @@
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
   {% if suppliers %}
-  <div class="mb-4 flex items-center justify-between">
-    <p class="text-xs text-gray-500 font-medium">{{ suppliers|length }} supplier{{ '' if suppliers|length == 1 else 's' }}</p>
-    <div class="relative w-48 sm:w-64">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="supplierSearch" placeholder="Search suppliers..." class="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary w-full transition">
+
+  {% set with_phone = suppliers|selectattr('phone')|list %}
+  {% set with_email = suppliers|selectattr('email')|list %}
+  {% set with_address = suppliers|selectattr('address')|list %}
+  {% set no_contact = suppliers|rejectattr('phone')|rejectattr('email')|rejectattr('address')|list %}
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total suppliers</p>
+          <i class="fas fa-truck text-primary text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-gray-800 mt-1">{{ suppliers|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Registered vendors</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">With phone</p>
+          <i class="fas fa-phone text-blue-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-blue-600 mt-1">{{ with_phone|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Callable</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">With email</p>
+          <i class="fas fa-envelope text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ with_email|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Reachable</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-gray-400 to-slate-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">No contact</p>
+          <i class="fas fa-circle-exclamation text-gray-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ no_contact|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Needs details</p>
+      </div>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+  <!-- Toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Supplier filters">
+        <button data-filter="all" class="sup-chip active bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ suppliers|length }}</span>
+        </button>
+        <button data-filter="phone" class="sup-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-phone mr-1 text-[10px] text-blue-500"></i> Phone <span class="ml-0.5 text-gray-400">{{ with_phone|length }}</span>
+        </button>
+        <button data-filter="email" class="sup-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-envelope mr-1 text-[10px] text-amber-500"></i> Email <span class="ml-0.5 text-gray-400">{{ with_email|length }}</span>
+        </button>
+        <button data-filter="address" class="sup-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-map-marker-alt mr-1 text-[10px] text-emerald-500"></i> Address <span class="ml-0.5 text-gray-400">{{ with_address|length }}</span>
+        </button>
+        <button data-filter="none" class="sup-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-exclamation mr-1 text-[10px] text-gray-500"></i> No contact <span class="ml-0.5 text-gray-400">{{ no_contact|length }}</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="supplierSearch" placeholder="Search name, phone, or email…" autocomplete="off"
+            aria-label="Search suppliers"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="supplierSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <select id="supplierSort" aria-label="Sort suppliers"
+          class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+          <option value="default">Sort</option>
+          <option value="name-asc">Name (A–Z)</option>
+          <option value="name-desc">Name (Z–A)</option>
+          <option value="newest">Newest first</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="supplierGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
     {% for s in suppliers %}
-    <div class="supplier-card group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all duration-300">
+    <div class="supplier-card group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-primary/20 transition-all duration-300"
+      data-filter-group="all"
+      data-has-phone="{{ 'true' if s.phone else 'false' }}"
+      data-has-email="{{ 'true' if s.email else 'false' }}"
+      data-has-address="{{ 'true' if s.address else 'false' }}"
+      data-name="{{ s.name|e }}"
+      data-created="{{ s.created_at.isoformat() if s.created_at else '' }}"
+      data-search="{{ ((s.name or '') ~ ' ' ~ (s.phone or '') ~ ' ' ~ (s.email or '') ~ ' ' ~ (s.address or ''))|lower|e }}">
+
       <div class="flex items-start gap-3 mb-4">
-        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-lg font-bold flex-shrink-0 group-hover:scale-105 transition-transform">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-lg font-bold flex-shrink-0 group-hover:scale-105 transition-transform ring-1 ring-teal-100">
           {{ s.name[:1]|upper }}
         </div>
         <div class="flex-1 min-w-0">
@@ -47,41 +150,71 @@
 
       <div class="space-y-2 text-sm">
         {% if s.phone %}
-        <a href="tel:{{ s.phone }}" class="flex items-center gap-2 text-gray-600 hover:text-primary transition group/row">
-          <span class="w-6 h-6 rounded-md bg-gray-50 group-hover/row:bg-primary/10 flex items-center justify-center flex-shrink-0 transition">
-            <i class="fas fa-phone text-gray-400 group-hover/row:text-primary text-[10px]"></i>
-          </span>
-          <span class="truncate">{{ s.phone }}</span>
-        </a>
+        <div class="flex items-center gap-1.5 text-gray-600 group/row">
+          <a href="tel:{{ s.phone }}" class="flex items-center gap-2 hover:text-primary transition flex-1 min-w-0">
+            <span class="w-6 h-6 rounded-md bg-gray-50 group-hover/row:bg-primary/10 flex items-center justify-center flex-shrink-0 transition">
+              <i class="fas fa-phone text-gray-400 group-hover/row:text-primary text-[10px]"></i>
+            </span>
+            <span class="truncate">{{ s.phone }}</span>
+          </a>
+          <button type="button" class="copy-contact-btn text-gray-400 hover:text-primary p-1 rounded transition" data-copy="{{ s.phone|e }}" data-label="Phone" title="Copy phone" aria-label="Copy phone">
+            <i class="fas fa-copy text-[10px]"></i>
+          </button>
+          <a href="https://wa.me/{{ s.phone|replace('+','')|replace(' ','')|replace('-','') }}" target="_blank" rel="noopener"
+            class="text-emerald-500 hover:text-emerald-600 p-1 rounded transition" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">
+            <i class="fab fa-whatsapp text-sm"></i>
+          </a>
+        </div>
         {% endif %}
+
         {% if s.email %}
-        <a href="mailto:{{ s.email }}" class="flex items-center gap-2 text-gray-600 hover:text-primary transition group/row">
-          <span class="w-6 h-6 rounded-md bg-gray-50 group-hover/row:bg-primary/10 flex items-center justify-center flex-shrink-0 transition">
-            <i class="fas fa-envelope text-gray-400 group-hover/row:text-primary text-[10px]"></i>
-          </span>
-          <span class="truncate">{{ s.email }}</span>
-        </a>
+        <div class="flex items-center gap-1.5 text-gray-600 group/row">
+          <a href="mailto:{{ s.email }}" class="flex items-center gap-2 hover:text-primary transition flex-1 min-w-0">
+            <span class="w-6 h-6 rounded-md bg-gray-50 group-hover/row:bg-primary/10 flex items-center justify-center flex-shrink-0 transition">
+              <i class="fas fa-envelope text-gray-400 group-hover/row:text-primary text-[10px]"></i>
+            </span>
+            <span class="truncate">{{ s.email }}</span>
+          </a>
+          <button type="button" class="copy-contact-btn text-gray-400 hover:text-primary p-1 rounded transition" data-copy="{{ s.email|e }}" data-label="Email" title="Copy email" aria-label="Copy email">
+            <i class="fas fa-copy text-[10px]"></i>
+          </button>
+        </div>
         {% endif %}
+
         {% if s.address %}
-        <div class="flex items-start gap-2 text-gray-600">
+        <div class="flex items-start gap-1.5 text-gray-600 group/row">
           <span class="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
             <i class="fas fa-map-marker-alt text-gray-400 text-[10px]"></i>
           </span>
-          <span class="text-xs leading-relaxed">{{ s.address }}</span>
+          <span class="text-xs leading-relaxed flex-1">{{ s.address }}</span>
+          <button type="button" class="copy-contact-btn text-gray-400 hover:text-primary p-1 rounded transition" data-copy="{{ s.address|e }}" data-label="Address" title="Copy address" aria-label="Copy address">
+            <i class="fas fa-copy text-[10px]"></i>
+          </button>
         </div>
         {% endif %}
       </div>
 
       {% if not s.phone and not s.email and not s.address %}
-      <p class="text-xs text-gray-400 italic mt-2">No contact details yet</p>
+      <div class="mt-2 flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-100">
+        <i class="fas fa-circle-exclamation"></i>
+        <span>No contact details yet</span>
+      </div>
       {% endif %}
     </div>
     {% endfor %}
   </div>
 
-  <div id="noResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm">No suppliers match your search.</p>
+  <!-- No results -->
+  <div id="noResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+    <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+      <i class="fas fa-search text-2xl text-gray-300"></i>
+    </div>
+    <p class="font-medium text-gray-500">No suppliers match your filters</p>
+    <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+    <button type="button" onclick="clearSupplierFilters()"
+      class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+      <i class="fas fa-rotate-left text-xs"></i> Clear filters
+    </button>
   </div>
 
   {% else %}
@@ -91,7 +224,7 @@
     </div>
     <p class="text-gray-700 font-semibold text-lg">No suppliers yet</p>
     <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Add your first supplier to start tracking stock deliveries and purchase orders.</p>
-    <button onclick="openModal()" class="mt-5 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-2">
+    <button onclick="openModal()" class="mt-5 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all inline-flex items-center gap-2 active:scale-95">
       <i class="fas fa-plus"></i> Add your first supplier
     </button>
   </div>
@@ -107,21 +240,24 @@
         <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <i class="fas fa-truck text-sm"></i>
         </div>
-        <h3 id="addModalTitle" class="font-bold text-gray-800">Add new supplier</h3>
+        <div>
+          <h3 id="addModalTitle" class="font-bold text-gray-800">Add new supplier</h3>
+          <p class="text-[11px] text-gray-400">Fields marked <span class="text-rose-500 font-bold">*</span> are required</p>
+        </div>
       </div>
       <button onclick="closeModal()" class="text-gray-400 hover:text-rose-500 hover:bg-rose-50 p-2 -mr-2 rounded-lg transition" aria-label="Close">
         <i class="fas fa-times"></i>
       </button>
     </div>
 
-    <form method="POST" action="{{ url_for('owner.add_supplier') }}" class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+    <form method="POST" action="{{ url_for('owner.add_supplier') }}" class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1" id="addSupForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div>
         <label for="sup_name" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
           <i class="fas fa-building text-primary text-[10px]"></i> Supplier name <span class="text-rose-500">*</span>
         </label>
-        <input id="sup_name" name="name" required placeholder="MedSupply Co."
+        <input id="sup_name" name="name" required placeholder="MedSupply Co." autocomplete="organization"
           class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
       </div>
 
@@ -130,14 +266,14 @@
           <label for="sup_phone" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
             <i class="fas fa-phone text-primary text-[10px]"></i> Phone
           </label>
-          <input id="sup_phone" name="phone" type="tel" placeholder="+233 24 000 0000"
+          <input id="sup_phone" name="phone" type="tel" placeholder="+233 24 000 0000" autocomplete="tel"
             class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
         </div>
         <div>
           <label for="sup_email" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
             <i class="fas fa-envelope text-primary text-[10px]"></i> Email
           </label>
-          <input id="sup_email" name="email" type="email" placeholder="sales@medsupply.com"
+          <input id="sup_email" name="email" type="email" placeholder="sales@medsupply.com" autocomplete="email"
             class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
         </div>
       </div>
@@ -146,7 +282,7 @@
         <label for="sup_address" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
           <i class="fas fa-map-marker-alt text-primary text-[10px]"></i> Address
         </label>
-        <input id="sup_address" name="address" placeholder="Industrial Area, Accra"
+        <input id="sup_address" name="address" placeholder="Industrial Area, Accra" autocomplete="street-address"
           class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
       </div>
 
@@ -154,17 +290,31 @@
         <button type="button" onclick="closeModal()" class="w-full sm:w-auto border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-medium px-5 py-3 sm:py-2.5 rounded-xl transition">
           Cancel
         </button>
-        <button type="submit" class="w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-6 py-3 sm:py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all inline-flex items-center justify-center gap-2">
-          <i class="fas fa-save"></i> Save supplier
+        <button type="submit" id="addSupBtn"
+          class="w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-6 py-3 sm:py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all inline-flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+          <span id="addSupBtnLabel" class="inline-flex items-center gap-2">
+            <i class="fas fa-save"></i> Save supplier
+          </span>
         </button>
       </div>
     </form>
   </div>
 </div>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ---------- Modal ---------- */
   function openModal() {
     var m = document.getElementById('addModal');
     m.classList.remove('hidden'); m.classList.add('flex');
@@ -176,24 +326,187 @@
     m.classList.add('hidden'); m.classList.remove('flex');
     document.body.style.overflow = '';
   }
-  document.getElementById('addModal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+  var __modal = document.getElementById('addModal');
+  if (__modal) __modal.addEventListener('click', function (e) { if (e.target === this) closeModal(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-  // Live search
+  /* ---------- Submit loading ---------- */
   (function () {
-    var input = document.getElementById('supplierSearch');
-    var noRes = document.getElementById('noResults');
-    if (!input) return;
-    input.addEventListener('input', function () {
-      var q = this.value.toLowerCase().trim();
-      var visible = 0;
-      document.querySelectorAll('.supplier-card').forEach(function (card) {
-        var match = !q || card.textContent.toLowerCase().includes(q);
-        card.style.display = match ? '' : 'none';
-        if (match) visible++;
+    var form = document.getElementById('addSupForm');
+    var btn = document.getElementById('addSupBtn');
+    var label = document.getElementById('addSupBtnLabel');
+    if (form && btn && label) {
+      form.addEventListener('submit', function () {
+        btn.disabled = true;
+        label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Saving…';
       });
-      if (noRes) noRes.classList.toggle('hidden', visible > 0 || !q);
+    }
+  })();
+
+  /* ---------- Filter + Search + Sort ---------- */
+  var activeFilter = 'all';
+
+  function apply() {
+    var search = document.getElementById('supplierSearch');
+    var noResults = document.getElementById('noResults');
+    var hdrCount = document.getElementById('hdrCount');
+
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+    var total = 0;
+
+    document.querySelectorAll('.supplier-card').forEach(function (card) {
+      total++;
+      var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeFilter === 'all'
+        || (activeFilter === 'phone' && card.dataset.hasPhone === 'true')
+        || (activeFilter === 'email' && card.dataset.hasEmail === 'true')
+        || (activeFilter === 'address' && card.dataset.hasAddress === 'true')
+        || (activeFilter === 'none' && card.dataset.hasPhone === 'false' && card.dataset.hasEmail === 'false' && card.dataset.hasAddress === 'false');
+      var show = ms && mf;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
     });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (hdrCount) hdrCount.textContent = visible;
+  }
+
+  function clearSupplierFilters() {
+    activeFilter = 'all';
+    document.querySelectorAll('.sup-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.sup-chip[data-filter="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    }
+    var s = document.getElementById('supplierSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('supplierSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('supplierSort');
+    if (sortSel) sortSel.value = 'default';
+    sortCards('default');
+    apply();
+  }
+
+  function sortCards(mode) {
+    var grid = document.getElementById('supplierGrid');
+    if (!grid) return;
+    var cards = Array.from(grid.querySelectorAll('.supplier-card'));
+    if (!cards.length) return;
+    cards.sort(function (a, b) {
+      switch (mode) {
+        case 'name-asc':
+          return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        case 'name-desc':
+          return (b.dataset.name || '').localeCompare(a.dataset.name || '');
+        case 'newest':
+          return (b.dataset.created || '').localeCompare(a.dataset.created || '');
+        default:
+          return 0;
+      }
+    });
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  (function () {
+    var search = document.getElementById('supplierSearch');
+    var searchClear = document.getElementById('supplierSearchClear');
+    var sortSel = document.getElementById('supplierSort');
+
+    if (search) {
+      search.addEventListener('input', function () {
+        if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+        apply();
+      });
+    }
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        apply();
+      });
+    }
+
+    document.querySelectorAll('.sup-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('.sup-chip').forEach(function (c) {
+          c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+          c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        });
+        chip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+        chip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+        activeFilter = chip.dataset.filter;
+        apply();
+      });
+    });
+
+    if (sortSel) {
+      sortSel.addEventListener('change', function () { sortCards(this.value); });
+    }
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+  })();
+
+  /* ---------- Copy + Toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-contact-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var text = btn.dataset.copy || '';
+      var label = btn.dataset.label || 'Value';
+      if (!text) return;
+
+      function done() { showToast(label + ' copied'); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

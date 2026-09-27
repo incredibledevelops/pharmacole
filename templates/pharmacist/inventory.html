@@ -9,7 +9,9 @@
     </button>
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Inventory</h1>
-      <p class="text-xs text-gray-400 truncate hidden sm:block" id="invCount">{{ items|length }} items</p>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">
+        <span id="invCount" aria-live="polite">{{ items|length }}</span> items · <span id="invVisibleCount">all shown</span>
+      </p>
     </div>
   </div>
   <div class="flex gap-2 flex-shrink-0">
@@ -17,7 +19,7 @@
       <i class="fas fa-print"></i> Print
     </button>
     <a href="{{ url_for('pharmacist.add_drug') }}"
-       class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2">
+       class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 active:scale-95">
       <i class="fas fa-plus"></i>
       <span class="hidden sm:inline">Add drug</span>
       <span class="sm:hidden">Add</span>
@@ -27,42 +29,107 @@
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
-  <!-- Filters + search -->
-  <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-    <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-      <button data-filter="all" class="filter-chip active bg-primary text-white text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
-        <i class="fas fa-layer-group mr-1 text-[10px]"></i> All
-      </button>
-      <button data-filter="low" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-        <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-amber-500"></i> Low stock
-      </button>
-      <button data-filter="expiring" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-        <i class="fas fa-clock mr-1 text-[10px] text-rose-500"></i> Expiring
-      </button>
-      <button data-filter="healthy" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-        <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Healthy
-      </button>
+  {% if items %}
+
+  {% set low_count = items|selectattr('quantity','le',items[0].min_threshold)|list|length %}
+  {% set healthy_count = items|length - low_count %}
+
+  <!-- Stats strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total SKUs</p>
+          <i class="fas fa-capsules text-primary text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-gray-800 mt-1">{{ items|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Tracked drugs</p>
+      </div>
     </div>
-    <div class="relative sm:ml-auto sm:w-64">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-      <input type="text" id="invSearch" placeholder="Search drug or SKU..."
-        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Low stock</p>
+          <i class="fas fa-triangle-exclamation text-amber-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ low_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Below threshold</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Expiring ≤30d</p>
+          <i class="fas fa-clock text-rose-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ expiring_count if expiring_count is defined else 0 }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">Needs attention</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Healthy</p>
+          <i class="fas fa-circle-check text-emerald-500 text-sm"></i>
+        </div>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ healthy_count }}</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">In good shape</p>
+      </div>
     </div>
   </div>
 
-  {% if not items %}
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
-    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center mx-auto mb-4">
-      <i class="fas fa-capsules text-3xl text-primary"></i>
+  <!-- Sticky toolbar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-5 sticky top-16 z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 flex-1" role="tablist" aria-label="Inventory filters">
+        <button data-filter="all" class="filter-chip active bg-primary text-white text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
+          <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="chip-count ml-1 opacity-80" data-count="all">{{ items|length }}</span>
+        </button>
+        <button data-filter="low" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-amber-500"></i> Low <span class="chip-count ml-1 text-gray-400" data-count="low">0</span>
+        </button>
+        <button data-filter="expiring" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-clock mr-1 text-[10px] text-rose-500"></i> Expiring <span class="chip-count ml-1 text-gray-400" data-count="expiring">0</span>
+        </button>
+        <button data-filter="healthy" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Healthy <span class="chip-count ml-1 text-gray-400" data-count="healthy">0</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-56">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" aria-hidden="true"></i>
+          <input type="text" id="invSearch" placeholder="Search drug or SKU…" autocomplete="off"
+            aria-label="Search inventory"
+            class="pl-8 pr-9 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+          <button type="button" id="invSearchClear"
+            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-md hover:bg-primary/5 transition"
+            aria-label="Clear search">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="relative flex-shrink-0">
+          <select id="invSort" aria-label="Sort inventory"
+            class="text-xs border border-gray-200 rounded-lg px-2.5 py-2.5 bg-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none pr-8 font-medium text-gray-700">
+            <option value="default">Sort</option>
+            <option value="name">Name (A–Z)</option>
+            <option value="qty-asc">Qty (low → high)</option>
+            <option value="qty-desc">Qty (high → low)</option>
+            <option value="expiry">Expiry (soonest)</option>
+            <option value="price-desc">Price (high → low)</option>
+          </select>
+          <i class="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+        </div>
+      </div>
     </div>
-    <p class="text-gray-700 font-semibold text-lg">No inventory yet</p>
-    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Start adding drugs to track stock, batches, and expiry dates.</p>
-    <a href="{{ url_for('pharmacist.add_drug') }}"
-       class="mt-5 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all">
-      <i class="fas fa-plus"></i> Add your first drug
-    </a>
   </div>
-  {% else %}
 
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
     <!-- Desktop table -->
@@ -73,23 +140,43 @@
             <th class="px-5 py-3 text-left font-semibold">Drug</th>
             <th class="px-5 py-3 text-left font-semibold">SKU</th>
             <th class="px-5 py-3 text-left font-semibold">Category</th>
-            <th class="px-5 py-3 text-left font-semibold">Batch</th>
-            <th class="px-5 py-3 text-left font-semibold">Qty</th>
+            <th class="px-5 py-3 text-left font-semibold">Stock level</th>
             <th class="px-5 py-3 text-left font-semibold">Expiry</th>
             <th class="px-5 py-3 text-right font-semibold">Price</th>
             <th class="px-5 py-3 text-right font-semibold">Adjust</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100" id="invTableBody">
           {% for i in items %}
           {% set d = i.expiry_date|days_until %}
           {% set status = 'low' if i.quantity <= i.min_threshold else ('expiring' if d <= 30 else 'healthy') %}
-          <tr class="inv-row hover:bg-gray-50/70 transition" data-status="{{ status }}" data-search="{{ (i.name ~ ' ' ~ i.sku)|lower }}">
+          {% set pct = (i.quantity / (i.min_threshold * 3) * 100) if i.min_threshold > 0 else 100 %}
+          {% set pct = 100 if pct > 100 else (0 if pct < 0 else pct) %}
+          <tr class="inv-row hover:bg-gray-50/70 transition"
+              data-status="{{ status }}"
+              data-search="{{ (i.name ~ ' ' ~ i.sku)|lower|e }}"
+              data-name="{{ i.name|e }}"
+              data-qty="{{ i.quantity }}"
+              data-expiry="{{ i.expiry_date.isoformat() if i.expiry_date else '' }}"
+              data-price="{{ i.selling_price }}"
+              data-days="{{ d }}">
+
             <td class="px-5 py-3.5">
               <p class="font-medium text-gray-800">{{ i.name }}</p>
               <p class="text-xs text-gray-400">{{ i.dosage_form or '' }}{% if i.dosage_form and i.pack_size %} · {% endif %}{{ i.pack_size or '' }}</p>
             </td>
-            <td class="px-5 py-3.5 text-gray-500 text-xs font-mono">{{ i.sku }}</td>
+
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-1.5 group/sku">
+                <span class="text-gray-500 text-xs font-mono">{{ i.sku }}</span>
+                <button type="button"
+                  class="copy-sku-btn opacity-0 group-hover/sku:opacity-100 text-gray-400 hover:text-primary p-1 rounded transition"
+                  data-sku="{{ i.sku|e }}" title="Copy SKU" aria-label="Copy SKU">
+                  <i class="fas fa-copy text-[10px]"></i>
+                </button>
+              </div>
+            </td>
+
             <td class="px-5 py-3.5">
               {% if i.category %}
                 <span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">{{ i.category }}</span>
@@ -97,11 +184,23 @@
                 <span class="text-xs text-gray-400">—</span>
               {% endif %}
             </td>
-            <td class="px-5 py-3.5 text-gray-500 text-xs font-mono">{{ i.batch_number or '—' }}</td>
-            <td class="px-5 py-3.5">
-              <span class="font-semibold {% if i.quantity <= i.min_threshold %}text-amber-600{% else %}text-gray-800{% endif %}">{{ i.quantity }}</span>
-              <span class="text-xs text-gray-400">/ {{ i.min_threshold }}</span>
+
+            <td class="px-5 py-3.5 min-w-[140px]">
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-semibold {% if i.quantity <= i.min_threshold %}text-amber-600{% else %}text-gray-800{% endif %}">
+                  {{ i.quantity }}
+                </span>
+                <span class="text-gray-400">min {{ i.min_threshold }}</span>
+              </div>
+              <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all
+                  {% if i.quantity <= i.min_threshold %}bg-amber-500
+                  {% elif i.quantity <= i.min_threshold * 2 %}bg-emerald-400
+                  {% else %}bg-emerald-500{% endif %}"
+                  style="width: {{ pct }}%"></div>
+              </div>
             </td>
+
             <td class="px-5 py-3.5 whitespace-nowrap">
               {% if d <= 30 %}
                 <span class="text-rose-600 font-semibold inline-flex items-center gap-1">
@@ -113,10 +212,16 @@
               {% else %}
                 <span class="text-gray-600">{{ i.expiry_date|nice_date }}</span>
               {% endif %}
+              <p class="text-[10px] mt-0.5 {% if d <= 30 %}text-rose-500{% elif d <= 60 %}text-amber-500{% else %}text-gray-400{% endif %}">
+                {% if d < 0 %}Expired {{ -d }}d ago{% elif d == 0 %}Expires today{% else %}in {{ d }} days{% endif %}
+              </p>
             </td>
+
             <td class="px-5 py-3.5 font-semibold text-primary whitespace-nowrap text-right">{{ i.selling_price|ghs }}</td>
+
             <td class="px-5 py-3.5 text-right">
-              <form method="POST" action="{{ url_for('pharmacist.adjust_stock', item_id=i._id) }}" class="inline-flex items-center gap-1.5" onsubmit="return confirm('Adjust stock for {{ i.name|e }}?')">
+              <form method="POST" action="{{ url_for('pharmacist.adjust_stock', item_id=i._id) }}"
+                class="inline-flex items-center gap-1.5" onsubmit="return confirm('Adjust stock for {{ i.name|e }}?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input name="delta" type="number" placeholder="±" step="1" required aria-label="Stock delta"
                   class="w-16 border border-gray-200 rounded-md px-2 py-1 text-xs outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/30 text-center">
@@ -127,7 +232,7 @@
                   <option value="internal">Internal</option>
                   <option value="restock">Restock</option>
                 </select>
-                <button class="text-xs bg-primary hover:bg-primaryLight text-white px-2.5 py-1 rounded-md font-medium transition">
+                <button class="text-xs bg-primary hover:bg-primaryLight text-white px-2.5 py-1 rounded-md font-medium transition active:scale-95">
                   Apply
                 </button>
               </form>
@@ -139,91 +244,235 @@
     </div>
 
     <!-- Mobile list -->
-    <div class="md:hidden divide-y divide-gray-100">
+    <div class="md:hidden divide-y divide-gray-100" id="invMobileList">
       {% for i in items %}
       {% set d = i.expiry_date|days_until %}
       {% set status = 'low' if i.quantity <= i.min_threshold else ('expiring' if d <= 30 else 'healthy') %}
-      <div class="inv-row p-4" data-status="{{ status }}" data-search="{{ (i.name ~ ' ' ~ i.sku)|lower }}">
+      {% set pct = (i.quantity / (i.min_threshold * 3) * 100) if i.min_threshold > 0 else 100 %}
+      {% set pct = 100 if pct > 100 else (0 if pct < 0 else pct) %}
+      <div class="inv-row p-4"
+          data-status="{{ status }}"
+          data-search="{{ (i.name ~ ' ' ~ i.sku)|lower|e }}"
+          data-name="{{ i.name|e }}"
+          data-qty="{{ i.quantity }}"
+          data-expiry="{{ i.expiry_date.isoformat() if i.expiry_date else '' }}"
+          data-price="{{ i.selling_price }}"
+          data-days="{{ d }}">
+
         <div class="flex items-start justify-between gap-3 mb-3">
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="font-semibold text-gray-800 truncate">{{ i.name }}</p>
             <p class="text-xs text-gray-400 truncate">{{ i.dosage_form or '' }}{% if i.dosage_form and i.pack_size %} · {% endif %}{{ i.pack_size or '' }}</p>
             <p class="text-[11px] text-gray-400 truncate mt-0.5 font-mono">SKU: {{ i.sku }}</p>
           </div>
-          <p class="font-bold text-primary whitespace-nowrap">{{ i.selling_price|ghs }}</p>
+          <div class="text-right flex-shrink-0">
+            <p class="font-bold text-primary whitespace-nowrap">{{ i.selling_price|ghs }}</p>
+            <button type="button"
+              class="copy-sku-btn text-gray-400 hover:text-primary p-1 rounded transition"
+              data-sku="{{ i.sku|e }}" title="Copy SKU" aria-label="Copy SKU">
+              <i class="fas fa-copy text-[10px]"></i>
+            </button>
+          </div>
         </div>
+
         <div class="grid grid-cols-2 gap-3 text-xs mb-3">
           <div>
-            <p class="text-gray-400 uppercase tracking-wide font-medium text-[10px]">Quantity</p>
-            <p class="font-semibold mt-0.5 {% if i.quantity <= i.min_threshold %}text-amber-600{% else %}text-gray-800{% endif %}">
+            <p class="text-gray-400 uppercase tracking-wide font-medium text-[10px] mb-1">Quantity</p>
+            <p class="font-semibold {% if i.quantity <= i.min_threshold %}text-amber-600{% else %}text-gray-800{% endif %}">
               {{ i.quantity }} <span class="text-gray-400 font-normal">/ min {{ i.min_threshold }}</span>
             </p>
+            <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mt-1.5">
+              <div class="h-full rounded-full
+                {% if i.quantity <= i.min_threshold %}bg-amber-500
+                {% elif i.quantity <= i.min_threshold * 2 %}bg-emerald-400
+                {% else %}bg-emerald-500{% endif %}"
+                style="width: {{ pct }}%"></div>
+            </div>
           </div>
           <div>
-            <p class="text-gray-400 uppercase tracking-wide font-medium text-[10px]">Expiry</p>
-            <p class="font-semibold mt-0.5 {% if d <= 30 %}text-rose-600{% elif d <= 60 %}text-amber-600{% else %}text-gray-700{% endif %}">
+            <p class="text-gray-400 uppercase tracking-wide font-medium text-[10px] mb-1">Expiry</p>
+            <p class="font-semibold {% if d <= 30 %}text-rose-600{% elif d <= 60 %}text-amber-600{% else %}text-gray-700{% endif %}">
               {{ i.expiry_date|nice_date }}
+            </p>
+            <p class="text-[10px] mt-0.5 {% if d <= 30 %}text-rose-500{% elif d <= 60 %}text-amber-500{% else %}text-gray-400{% endif %}">
+              {% if d < 0 %}Expired {{ -d }}d ago{% elif d == 0 %}Expires today{% else %}in {{ d }} days{% endif %}
             </p>
           </div>
         </div>
-        <form method="POST" action="{{ url_for('pharmacist.adjust_stock', item_id=i._id) }}" class="flex items-center gap-2" onsubmit="return confirm('Adjust stock for {{ i.name|e }}?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input name="delta" type="number" placeholder="±" step="1" required aria-label="Stock delta"
-            class="w-16 border border-gray-200 rounded-md px-2 py-2 text-xs outline-none focus:ring-1 focus:ring-primary text-center">
-          <select name="reason" aria-label="Adjustment reason"
-            class="flex-1 text-xs border border-gray-200 rounded-md px-2 py-2 bg-white outline-none focus:ring-1 focus:ring-primary">
-            <option value="damage">Damage</option>
-            <option value="return">Return</option>
-            <option value="internal">Internal use</option>
-            <option value="restock">Restock</option>
-          </select>
-          <button class="text-xs bg-primary hover:bg-primaryLight text-white px-3 py-2 rounded-md font-semibold whitespace-nowrap transition">
-            Apply
-          </button>
-        </form>
+
+        <!-- Collapsible adjust form -->
+        <details class="group text-xs">
+          <summary class="cursor-pointer text-primary font-semibold inline-flex items-center gap-1.5 list-none select-none">
+            <i class="fas fa-sliders group-open:rotate-90 transition text-[10px]"></i>
+            Adjust stock
+          </summary>
+          <form method="POST" action="{{ url_for('pharmacist.adjust_stock', item_id=i._id) }}"
+            class="flex items-center gap-2 mt-2.5" onsubmit="return confirm('Adjust stock for {{ i.name|e }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input name="delta" type="number" placeholder="±" step="1" required aria-label="Stock delta"
+              class="w-16 border border-gray-200 rounded-md px-2 py-2 text-xs outline-none focus:ring-1 focus:ring-primary text-center">
+            <select name="reason" aria-label="Adjustment reason"
+              class="flex-1 text-xs border border-gray-200 rounded-md px-2 py-2 bg-white outline-none focus:ring-1 focus:ring-primary">
+              <option value="damage">Damage</option>
+              <option value="return">Return</option>
+              <option value="internal">Internal</option>
+              <option value="restock">Restock</option>
+            </select>
+            <button class="text-xs bg-primary hover:bg-primaryLight text-white px-3 py-2 rounded-md font-semibold whitespace-nowrap transition active:scale-95">
+              Apply
+            </button>
+          </form>
+        </details>
       </div>
       {% endfor %}
     </div>
+
+    <!-- No results -->
+    <div id="invNoResults" class="hidden py-14 px-4 text-center text-gray-400" role="status">
+      <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-search text-2xl text-gray-300"></i>
+      </div>
+      <p class="font-medium text-gray-500">No items match your filters</p>
+      <p class="text-sm mt-1">Try a different search or clear the filter.</p>
+      <button type="button" onclick="clearAllFilters()"
+        class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+        <i class="fas fa-rotate-left text-xs"></i> Clear filters
+      </button>
+    </div>
   </div>
 
-  <div id="invNoResults" class="hidden mt-10 text-center text-gray-400">
-    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
-    <p class="text-sm font-medium">No items match your filters.</p>
-    <p class="text-xs mt-1">Try a different search or filter.</p>
+  {% else %}
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-capsules text-3xl text-primary"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">No inventory yet</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Start adding drugs to track stock, batches, and expiry dates.</p>
+    <a href="{{ url_for('pharmacist.add_drug') }}"
+       class="mt-5 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-95">
+      <i class="fas fa-plus"></i> Add your first drug
+    </a>
   </div>
 
   {% endif %}
 </main>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"
+  class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
+  <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-emerald-400"></i>
+    <span id="toastMsg">Copied!</span>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-  (function () {
+  /* ---------- Filter / Search / Sort ---------- */
+  var activeFilter = 'all';
+
+  function computeCounts() {
+    var counts = { all: 0, low: 0, expiring: 0, healthy: 0 };
+    document.querySelectorAll('.inv-row').forEach(function (row) {
+      counts.all++;
+      var s = row.dataset.status;
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    document.querySelectorAll('.chip-count').forEach(function (el) {
+      var key = el.dataset.count;
+      if (key && counts[key] !== undefined) el.textContent = counts[key];
+    });
+  }
+
+  function apply() {
     var search = document.getElementById('invSearch');
     var noResults = document.getElementById('invNoResults');
     var countEl = document.getElementById('invCount');
-    var activeFilter = 'all';
+    var visibleCountEl = document.getElementById('invVisibleCount');
 
-    function apply() {
-      var q = (search && search.value ? search.value : '').toLowerCase().trim();
-      var visible = 0;
-      document.querySelectorAll('.inv-row').forEach(function (row) {
-        var ms = !q || row.dataset.search.indexOf(q) !== -1;
-        var mf = activeFilter === 'all' || row.dataset.status === activeFilter;
-        var show = ms && mf;
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
-      });
-      if (noResults) noResults.classList.toggle('hidden', visible > 0);
-      if (countEl) {
-        var total = document.querySelectorAll('.inv-row').length;
-        countEl.textContent = (visible === total)
-          ? total + ' items'
-          : visible + ' of ' + total + ' items';
-      }
+    var q = (search && search.value ? search.value : '').toLowerCase().trim();
+    var visible = 0;
+    var total = 0;
+
+    document.querySelectorAll('.inv-row').forEach(function (row) {
+      total++;
+      var ms = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var mf = activeFilter === 'all' || row.dataset.status === activeFilter;
+      var show = ms && mf;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    if (countEl) countEl.textContent = visible;
+    if (visibleCountEl) visibleCountEl.textContent = (visible === total) ? 'all shown' : 'of ' + total + ' shown';
+  }
+
+  function clearAllFilters() {
+    activeFilter = 'all';
+    document.querySelectorAll('.filter-chip').forEach(function (c) {
+      c.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      c.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-600');
+    });
+    var allChip = document.querySelector('.filter-chip[data-filter="all"]');
+    if (allChip) {
+      allChip.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      allChip.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-600');
     }
+    var s = document.getElementById('invSearch');
+    if (s) s.value = '';
+    var clearBtn = document.getElementById('invSearchClear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    var sortSel = document.getElementById('invSort');
+    if (sortSel) sortSel.value = 'default';
+    sortRows('default');
+    apply();
+  }
 
-    if (search) search.addEventListener('input', apply);
+  /* ---------- Sorting ---------- */
+  function sortRows(mode) {
+    ['invTableBody', 'invMobileList'].forEach(function (id) {
+      var container = document.getElementById(id);
+      if (!container) return;
+      var rows = Array.from(container.querySelectorAll('.inv-row'));
+      if (!rows.length) return;
+      rows.sort(function (a, b) {
+        function num(v) { return parseFloat(v) || 0; }
+        switch (mode) {
+          case 'name': return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+          case 'qty-asc': return num(a.dataset.qty) - num(b.dataset.qty);
+          case 'qty-desc': return num(b.dataset.qty) - num(a.dataset.qty);
+          case 'expiry': return (a.dataset.expiry || '').localeCompare(b.dataset.expiry || '');
+          case 'price-desc': return num(b.dataset.price) - num(a.dataset.price);
+          default: return 0;
+        }
+      });
+      rows.forEach(function (r) { container.appendChild(r); });
+    });
+  }
+
+  /* ---------- Wire up ---------- */
+  (function () {
+    var search = document.getElementById('invSearch');
+    var searchClear = document.getElementById('invSearchClear');
+    var sortSel = document.getElementById('invSort');
+
+    computeCounts();
+
+    if (search) search.addEventListener('input', function () {
+      if (searchClear) searchClear.classList.toggle('hidden', !search.value);
+      apply();
+    });
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); }
+        searchClear.classList.add('hidden');
+        apply();
+      });
+    }
 
     document.querySelectorAll('.filter-chip').forEach(function (chip) {
       chip.addEventListener('click', function () {
@@ -237,6 +486,65 @@
         apply();
       });
     });
+
+    if (sortSel) sortSel.addEventListener('change', function () { sortRows(this.value); });
+
+    // "/" focuses search
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== search &&
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+    });
+  })();
+
+  /* ---------- Copy SKU + toast ---------- */
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastMsg = document.getElementById('toastMsg');
+    var timer;
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-3');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        toast.classList.add('opacity-0', 'translate-y-3');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 1600);
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.copy-sku-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var sku = btn.dataset.sku || '';
+      if (!sku) return;
+
+      function done() { showToast('SKU copied: ' + sku); }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(sku).then(done).catch(function () {
+          fallbackCopy(sku); done();
+        });
+      } else {
+        fallbackCopy(sku); done();
+      }
+    });
+
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
   })();
 </script>
 {% endblock %}

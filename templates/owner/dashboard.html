@@ -2,45 +2,105 @@
 {% block title %}Dashboard · {{ t_name(tenant) }}{% endblock %}
 {% block body %}
 
+{% set status = t_status(tenant) %}
+{% set expires = t_expires(tenant) %}
+{% set days_left = (expires - now()).days if (expires and status == 'active') else 0 %}
+
 <header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
   <div class="flex items-center gap-3 min-w-0">
     <button onclick="openSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
       <i class="fas fa-bars text-lg"></i>
     </button>
     <div class="min-w-0">
-      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Welcome back, {{ current_user.name or 'Owner' }} 👋</h1>
-      <p class="text-xs text-gray-400 truncate">{{ t_name(tenant) }} · <span class="font-mono">{{ t_code(tenant) }}</span></p>
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">
+        <span id="greeting">Welcome back</span>, {{ current_user.name or 'Owner' }} 👋
+      </h1>
+      <p class="text-xs text-gray-400 truncate">
+        {{ t_name(tenant) }} · <span class="font-mono">{{ t_code(tenant) }}</span>
+        <span class="hidden sm:inline"> · <span id="liveClock" aria-live="off">—</span></span>
+      </p>
     </div>
   </div>
-  <!--<div class="flex items-center gap-2 flex-shrink-0">
-    <a href="{{ url_for('cashier.pos') }}"
-       class="hidden sm:inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all">
-      <i class="fas fa-cash-register"></i> Open POS
+
+  <!-- Desktop CTA -->
+  <div class="hidden md:flex items-center gap-2 flex-shrink-0">
+    <a href="{{ url_for('owner.reports') }}"
+       class="inline-flex items-center gap-2 bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg transition">
+      <i class="fas fa-chart-line text-primary"></i> Reports
     </a>
-    <a href="{{ url_for('cashier.pos') }}"
-       class="sm:hidden inline-flex items-center justify-center bg-primary hover:bg-primaryLight text-white text-sm w-10 h-10 rounded-lg shadow-sm transition" aria-label="Open POS">
-      <i class="fas fa-cash-register"></i>
+    <a href="{{ url_for('owner.inventory') }}"
+       class="inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all">
+      <i class="fas fa-capsules"></i> Inventory
     </a>
-  </div>-->
+  </div>
 </header>
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
 
+  <!-- Renewal urgency banner -->
+  {% if status == 'active' and days_left <= 7 and days_left > 0 %}
+  <div class="mb-5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 bg-gradient-to-r from-amber-50 to-amber-100/40 border border-amber-200">
+    <div class="flex items-start gap-3 flex-1 min-w-0">
+      <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-hourglass-half"></i>
+      </span>
+      <div class="min-w-0">
+        <p class="font-bold text-gray-800 text-sm sm:text-base">Subscription expires in {{ days_left }} day{{ '' if days_left == 1 else 's' }}</p>
+        <p class="text-xs sm:text-sm text-gray-600 mt-0.5">Renew now to avoid locking out your entire team.</p>
+      </div>
+    </div>
+    <a href="{{ url_for('owner.subscription') }}"
+       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-bold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95">
+      <i class="fas fa-sync-alt"></i> Manage subscription
+    </a>
+  </div>
+  {% elif status != 'active' %}
+  <div class="mb-5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 bg-gradient-to-r from-rose-50 to-rose-100/40 border border-rose-200">
+    <div class="flex items-start gap-3 flex-1 min-w-0">
+      <span class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-lock"></i>
+      </span>
+      <div class="min-w-0">
+        <p class="font-bold text-gray-800 text-sm sm:text-base">
+          {% if status == 'pending' %}Activation pending{% else %}Workspace locked{% endif %}
+        </p>
+        <p class="text-xs sm:text-sm text-gray-600 mt-0.5">
+          {% if status == 'pending' %}Complete payment to unlock all features.{% else %}Renew to unlock POS, inventory, and reporting.{% endif %}
+        </p>
+      </div>
+    </div>
+    <a href="{{ url_for('owner.subscription') }}"
+       class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-bold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95">
+      <i class="fas fa-bolt"></i> Renew now
+    </a>
+  </div>
+  {% endif %}
+
   <!-- Stats -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 mb-5 md:mb-6">
-    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+
+    <a href="{{ url_for('owner.reports') }}"
+       class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all duration-300 block">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Today's sales</p>
           <i class="fas fa-arrow-trend-up text-primary"></i>
         </div>
-        <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-800 truncate">{{ total_sales_today|ghs }}</p>
-        <p class="text-[11px] text-gray-400 mt-1">Since midnight</p>
+        <p id="statToday" class="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-800 truncate transition-colors duration-500">
+          {{ total_sales_today|ghs }}
+        </p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-[11px] text-gray-400">Since midnight</p>
+          <span class="text-[10px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+            View →
+          </span>
+        </div>
       </div>
-    </div>
+    </a>
 
-    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+    <a href="{{ url_for('owner.inventory') }}"
+       class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-amber-300/40 hover:-translate-y-0.5 transition-all duration-300 block">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
         <div class="flex items-center justify-between mb-2">
@@ -48,11 +108,17 @@
           <i class="fas fa-triangle-exclamation text-amber-500"></i>
         </div>
         <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-amber-600">{{ low_stock|length }}</p>
-        <p class="text-[11px] text-gray-400 mt-1">Items below threshold</p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-[11px] text-gray-400">Below threshold</p>
+          <span class="text-[10px] text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            Fix →
+          </span>
+        </div>
       </div>
-    </div>
+    </a>
 
-    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+    <a href="{{ url_for('owner.inventory') }}"
+       class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-rose-300/40 hover:-translate-y-0.5 transition-all duration-300 block">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
         <div class="flex items-center justify-between mb-2">
@@ -60,11 +126,17 @@
           <i class="fas fa-clock text-rose-500"></i>
         </div>
         <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-rose-600">{{ expiring|length }}</p>
-        <p class="text-[11px] text-gray-400 mt-1">Needs attention</p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-[11px] text-gray-400">Needs attention</p>
+          <span class="text-[10px] text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            Review →
+          </span>
+        </div>
       </div>
-    </div>
+    </a>
 
-    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+    <a href="{{ url_for('owner.employees') }}"
+       class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-blue-300/40 hover:-translate-y-0.5 transition-all duration-300 block">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
       <div class="relative">
         <div class="flex items-center justify-between mb-2">
@@ -72,13 +144,131 @@
           <i class="fas fa-users text-blue-500"></i>
         </div>
         <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-800">{{ employees|length }}</p>
-        <p class="text-[11px] text-gray-400 mt-1">On your team</p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-[11px] text-gray-400">On your team</p>
+          <span class="text-[10px] text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            Manage →
+          </span>
+        </div>
       </div>
+    </a>
+  </div>
+
+  <!-- 7-day trend + Payment mix -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-4 md:mb-6">
+
+    <!-- 7-day trend -->
+    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+            <i class="fas fa-chart-column text-sm"></i>
+          </span>
+          7-day sales trend
+        </h3>
+        <a href="{{ url_for('owner.reports') }}" class="text-xs text-primary hover:underline font-medium">View reports →</a>
+      </div>
+
+      {% set trend = weekly_sales if weekly_sales is defined else [] %}
+      {% if trend and trend|length > 0 %}
+        {% set max_val = trend|map(attribute='total')|max %}
+        <div class="flex items-end justify-between gap-2 h-40">
+          {% for day in trend %}
+          {% set pct = (day.total / max_val * 100) if max_val > 0 else 0 %}
+          <div class="flex-1 flex flex-col items-center gap-2 group">
+            <span class="text-[10px] font-semibold text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              {{ day.total|ghs }}
+            </span>
+            <div class="w-full bg-gray-100 rounded-t-lg relative overflow-hidden" style="height: 100%;">
+              <div class="absolute bottom-0 left-0 right-0 rounded-t-lg bg-gradient-to-t from-primary to-primaryLight transition-all duration-500 hover:from-primaryDark"
+                style="height: {{ pct }}%;"
+                title="{{ day.label }} · {{ day.total|ghs }}"></div>
+            </div>
+            <span class="text-[10px] text-gray-400 font-medium">{{ day.label }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="py-12 text-center text-gray-400">
+          <i class="fas fa-chart-column text-3xl mb-2 block text-gray-300"></i>
+          <p class="text-sm">Sales trend will appear after your first transactions.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Payment mix -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center">
+          <i class="fas fa-credit-card text-sm"></i>
+        </span>
+        Today's mix
+      </h3>
+
+      {% set pm = payment_mix if payment_mix is defined else {} %}
+      {% set cash = pm.get('cash', 0) %}
+      {% set card = pm.get('card', 0) %}
+      {% set momo = pm.get('momo', 0) %}
+      {% set mix_total = cash + card + momo %}
+
+      {% if mix_total > 0 %}
+        <div class="space-y-4">
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="text-gray-600 inline-flex items-center gap-1.5">
+                <i class="fas fa-money-bill-wave text-emerald-500"></i> Cash
+              </span>
+              <span class="font-semibold text-gray-700">{{ cash|ghs }}</span>
+            </div>
+            <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                style="width: {{ (cash / mix_total * 100)|round(1) }}%"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="text-gray-600 inline-flex items-center gap-1.5">
+                <i class="fas fa-credit-card text-blue-500"></i> Card
+              </span>
+              <span class="font-semibold text-gray-700">{{ card|ghs }}</span>
+            </div>
+            <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-blue-500 rounded-full transition-all duration-700"
+                style="width: {{ (card / mix_total * 100)|round(1) }}%"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="text-gray-600 inline-flex items-center gap-1.5">
+                <i class="fas fa-mobile-alt text-purple-500"></i> MoMo
+              </span>
+              <span class="font-semibold text-gray-700">{{ momo|ghs }}</span>
+            </div>
+            <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-purple-500 rounded-full transition-all duration-700"
+                style="width: {{ (momo / mix_total * 100)|round(1) }}%"></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-gray-400 mt-4 text-center">
+          Total: <span class="font-semibold text-gray-600">{{ mix_total|ghs }}</span>
+        </p>
+      {% else %}
+        <div class="py-8 text-center text-gray-400">
+          <i class="fas fa-chart-pie text-3xl mb-2 block text-gray-300"></i>
+          <p class="text-sm">No sales yet today.</p>
+        </div>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Sales + Alerts -->
+  <!-- Recent sales + alerts -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
+
+    <!-- Recent sales -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
       <div class="flex items-center justify-between mb-4">
         <h3 class="font-semibold text-gray-800 flex items-center gap-2">
@@ -93,11 +283,14 @@
         {% for s in recent_sales %}
         <li class="py-3 flex justify-between items-center gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
           <div class="min-w-0 flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-teal-50 text-primary flex items-center justify-center flex-shrink-0">
-              <i class="fas fa-check text-xs"></i>
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+              {% if s.payment_method == 'cash' %}bg-emerald-50 text-emerald-600
+              {% elif s.payment_method == 'card' %}bg-blue-50 text-blue-600
+              {% else %}bg-purple-50 text-purple-600{% endif %}">
+              <i class="fas {% if s.payment_method == 'cash' %}fa-money-bill-wave{% elif s.payment_method == 'card' %}fa-credit-card{% else %}fa-mobile-alt{% endif %} text-xs"></i>
             </div>
             <div class="min-w-0">
-              <p class="font-medium truncate text-gray-800">{{ s.receipt_no }}</p>
+              <p class="font-medium truncate text-gray-800 font-mono text-xs">{{ s.receipt_no }}</p>
               <p class="text-xs text-gray-400 truncate">{{ s.cashier_name }} · {{ s.payment_method|capitalize }}</p>
             </div>
           </div>
@@ -106,12 +299,14 @@
         {% else %}
         <li class="py-8 text-center text-gray-400">
           <i class="fas fa-receipt text-2xl mb-2 block text-gray-300"></i>
-          No sales yet today.
+          <p class="text-sm font-medium text-gray-500">No sales yet today</p>
+          <p class="text-xs mt-1">Transactions will appear here as they happen.</p>
         </li>
         {% endfor %}
       </ul>
     </div>
 
+    <!-- Priority alerts -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
       <div class="flex items-center justify-between mb-4">
         <h3 class="font-semibold text-gray-800 flex items-center gap-2">
@@ -127,26 +322,28 @@
         {% endif %}
       </div>
       <ul class="divide-y divide-gray-100 text-sm">
-        {% for i in low_stock %}
+        {% set combined = [] %}
+        {% for i in low_stock %}{% set _ = combined.append(('low', i)) %}{% endfor %}
+        {% for i in expiring %}{% set _ = combined.append(('exp', i)) %}{% endfor %}
+        {% for kind, i in combined[:6] %}
         <li class="py-3 flex items-start gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
-          <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-            <i class="fas fa-boxes-stacked text-xs"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
-            <p class="text-xs text-amber-600">Low stock · only {{ i.quantity }} left</p>
-          </div>
-        </li>
-        {% endfor %}
-        {% for i in expiring %}
-        <li class="py-3 flex items-start gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
-          <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
-            <i class="fas fa-clock text-xs"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
-            <p class="text-xs text-rose-600">Expires {{ i.expiry_date|nice_date }}</p>
-          </div>
+          {% if kind == 'low' %}
+            <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+              <i class="fas fa-boxes-stacked text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
+              <p class="text-xs text-amber-600">Low stock · only {{ i.quantity }} left</p>
+            </div>
+          {% else %}
+            <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+              <i class="fas fa-clock text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
+              <p class="text-xs text-rose-600">Expires {{ i.expiry_date|nice_date }}</p>
+            </div>
+          {% endif %}
         </li>
         {% endfor %}
         {% if not low_stock and not expiring %}
@@ -157,37 +354,169 @@
         </li>
         {% endif %}
       </ul>
+      {% if (low_stock|length) + (expiring|length) > 6 %}
+      <div class="mt-3 pt-3 border-t border-gray-100 text-center">
+        <a href="{{ url_for('owner.inventory') }}"
+           class="text-xs text-primary hover:underline font-semibold inline-flex items-center gap-1">
+          View all {{ (low_stock|length) + (expiring|length) }} alerts
+          <i class="fas fa-arrow-right text-[9px]"></i>
+        </a>
+      </div>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Subscription -->
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="font-semibold text-gray-800 flex items-center gap-2">
-        <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center">
-          <i class="fas fa-crown text-sm"></i>
+  <!-- Quick actions + Subscription -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+
+    <!-- Quick actions -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+          <i class="fas fa-bolt text-sm"></i>
         </span>
-        Subscription
+        Quick actions
       </h3>
-      <a href="{{ url_for('owner.subscription') }}" class="text-xs text-primary hover:underline font-medium">Manage →</a>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <a href="{{ url_for('owner.inventory') }}"
+           class="group flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 hover:-translate-y-0.5 transition-all">
+          <span class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition">
+            <i class="fas fa-capsules"></i>
+          </span>
+          <span class="text-xs font-semibold text-gray-700 text-center leading-tight">Inventory</span>
+        </a>
+        <a href="{{ url_for('owner.reports') }}"
+           class="group flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 hover:-translate-y-0.5 transition-all">
+          <span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+            <i class="fas fa-chart-line"></i>
+          </span>
+          <span class="text-xs font-semibold text-gray-700 text-center leading-tight">Reports</span>
+        </a>
+        <a href="{{ url_for('owner.employees') }}"
+           class="group flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 hover:-translate-y-0.5 transition-all">
+          <span class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition">
+            <i class="fas fa-users"></i>
+          </span>
+          <span class="text-xs font-semibold text-gray-700 text-center leading-tight">Employees</span>
+        </a>
+        <a href="{{ url_for('owner.suppliers') }}"
+           class="group flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 hover:-translate-y-0.5 transition-all">
+          <span class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition">
+            <i class="fas fa-truck"></i>
+          </span>
+          <span class="text-xs font-semibold text-gray-700 text-center leading-tight">Suppliers</span>
+        </a>
+      </div>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-      <div>
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Status</p>
-        <p class="font-bold {% if t_status(tenant) == 'active' %}text-emerald-600{% else %}text-rose-600{% endif %} mt-1 inline-flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full {% if t_status(tenant) == 'active' %}bg-emerald-500 animate-pulse{% else %}bg-rose-500{% endif %}"></span>
-          {{ t_status(tenant)|capitalize }}
-        </p>
+
+    <!-- Subscription -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center">
+            <i class="fas fa-crown text-sm"></i>
+          </span>
+          Subscription
+        </h3>
+        <a href="{{ url_for('owner.subscription') }}" class="text-xs text-primary hover:underline font-medium">Manage →</a>
       </div>
-      <div>
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Expires</p>
-        <p class="font-medium text-gray-700 mt-1">{{ t_expires(tenant)|nice_date }}</p>
+
+      <div class="grid grid-cols-3 gap-4 text-sm mb-4">
+        <div>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Status</p>
+          <p class="font-bold {% if status == 'active' %}text-emerald-600{% elif status == 'pending' %}text-amber-600{% else %}text-rose-600{% endif %} mt-1 inline-flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full {% if status == 'active' %}bg-emerald-500 animate-pulse{% elif status == 'pending' %}bg-amber-500{% else %}bg-rose-500{% endif %}"></span>
+            {{ status|capitalize }}
+          </p>
+        </div>
+        <div>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Expires</p>
+          <p class="font-medium text-gray-700 mt-1 text-xs">{{ expires|nice_date }}</p>
+        </div>
+        <div>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Plan</p>
+          <p class="font-medium text-gray-700 mt-1 text-xs">{{ t_amount(tenant)|ghs }}/mo</p>
+        </div>
       </div>
+
+      {% if status == 'active' and expires and days_left > 0 %}
       <div>
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Plan</p>
-        <p class="font-medium text-gray-700 mt-1">{{ t_amount(tenant)|ghs }}/mo</p>
+        <div class="flex justify-between text-[11px] mb-1.5">
+          <span class="text-gray-500">Days remaining</span>
+          <span class="font-bold text-gray-700">{{ days_left }} / 30</span>
+        </div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-500
+            {% if days_left <= 3 %}bg-rose-500{% elif days_left <= 7 %}bg-amber-500{% else %}bg-gradient-to-r from-primary to-primaryLight{% endif %}"
+            style="width: {{ [(days_left / 30 * 100), 0]|max|round(1) if days_left > 0 else 0 }}%"></div>
+        </div>
       </div>
+      {% endif %}
     </div>
   </div>
+
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* ---------- Time-based greeting ---------- */
+  (function () {
+    var h = new Date().getHours();
+    var g = 'Welcome back';
+    if (h < 12) g = 'Good morning';
+    else if (h < 17) g = 'Good afternoon';
+    else if (h < 21) g = 'Good evening';
+    else g = 'Working late';
+    var el = document.getElementById('greeting');
+    if (el) el.textContent = g;
+  })();
+
+  /* ---------- Live clock ---------- */
+  (function () {
+    var el = document.getElementById('liveClock');
+    if (!el) return;
+    function tick() {
+      var d = new Date();
+      var hh = String(d.getHours()).padStart(2, '0');
+      var mm = String(d.getMinutes()).padStart(2, '0');
+      el.textContent = hh + ':' + mm;
+    }
+    tick();
+    setInterval(tick, 30000);
+  })();
+
+  /* ---------- Auto-refresh today's total ---------- */
+  (function () {
+    var el = document.getElementById('statToday');
+    if (!el) return;
+
+    var endpoint = "{{ url_for('owner.dashboard') }}";
+    var lastText = el.textContent.trim();
+
+    function fetchFresh() {
+      // Fetch the same page and extract the value (lightweight server-side way)
+      // If you have a dedicated JSON endpoint, replace with fetch of that.
+      fetch(endpoint, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          if (!html) return;
+          var m = html.match(/id="statToday"[^>]*>([^<]+)</);
+          if (m && m[1] && m[1].trim() !== lastText) {
+            lastText = m[1].trim();
+            el.style.transition = 'color 0.4s ease, background 0.4s ease';
+            el.style.color = '#14b8a6';
+            el.textContent = lastText;
+            setTimeout(function () { el.style.color = ''; }, 1200);
+          }
+        })
+        .catch(function () { /* silent */ });
+    }
+
+    // Only auto-refresh if the tab is visible
+    setInterval(function () {
+      if (document.visibilityState === 'visible') fetchFresh();
+    }, 60000);
+  })();
+</script>
 {% endblock %}
