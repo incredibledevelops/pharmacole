@@ -28,16 +28,16 @@ def _float(key: str, default: float) -> float:
 
 class Config:
     # ---------- Flask ----------
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
-    PREFERRED_URL_SCHEME = os.getenv("PREFERRED_URL_SCHEME", "http")
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    PREFERRED_URL_SCHEME = os.getenv("PREFERRED_URL_SCHEME")
 
     # ---------- MongoDB ----------
-    MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017/pharmacole")
+    MONGO_URI = os.getenv("MONGO_URI")
     MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "pharmacole")
 
     # ---------- Paystack ----------
-    PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "").strip()
-    PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "").strip()
+    PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY").strip()
+    PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY").strip()
     PAYSTACK_BASE_URL = os.getenv("PAYSTACK_BASE_URL", "https://api.paystack.co").rstrip("/")
 
     # ---------- App URL ----------
@@ -49,8 +49,8 @@ class Config:
     SUBSCRIPTION_DURATION_DAYS = _int("SUBSCRIPTION_DURATION_DAYS", 30)
 
     # ---------- Super admin seed ----------
-    SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL", "admin@pharmacole.com").lower().strip()
-    SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD", "changeme123")
+    SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL").lower().strip()
+    SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD")
 
     # ---------- Session cookies ----------
     SESSION_COOKIE_SECURE = _bool("SESSION_COOKIE_SECURE", False)
@@ -63,8 +63,8 @@ class Config:
     WTF_CSRF_TIME_LIMIT = None  # tied to session lifetime
 
     # ---------- Rate limiting ----------
-    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
-    RATELIMIT_DEFAULT = os.getenv("RATELIMIT_DEFAULT", "200 per hour")
+    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI")
+    RATELIMIT_DEFAULT = os.getenv("RATELIMIT_DEFAULT")
     RATELIMIT_HEADERS_ENABLED = True
 
     # ---------- Uploads / size ----------
