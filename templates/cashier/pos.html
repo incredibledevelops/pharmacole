@@ -1,0 +1,286 @@
+{% extends "cashier/base.html" %}
+{% block title %}POS · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openCashierSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Point of Sale</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">{{ t_name(tenant) }} · {{ current_user.name or 'Cashier' }}</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-3 flex-shrink-0">
+    <div class="text-right">
+      <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium hidden sm:block">Today's total</p>
+      <p class="text-sm sm:text-base font-bold text-primary whitespace-nowrap">{{ today_total|ghs }}</p>
+    </div>
+    <span class="hidden sm:flex w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white items-center justify-center text-xs font-bold shadow-md">
+      {{ (current_user.name or 'CA')[:2]|upper }}
+    </span>
+  </div>
+</header>
+
+<div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+
+  <!-- Products -->
+  <section class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+    <div class="relative mb-4">
+      <i class="fas fa-barcode absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" aria-hidden="true"></i>
+      <input type="text" id="posSearch" placeholder="Scan barcode or search drug / SKU…"
+        autocomplete="off"
+        class="pl-11 pr-10 py-3.5 border border-gray-200 rounded-xl text-sm outline-none transition
+               focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 w-full bg-white shadow-sm">
+      <button type="button" id="clearSearch"
+        class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary p-1.5 rounded-lg hover:bg-primary/5 transition"
+        aria-label="Clear search">
+        <i class="fas fa-xmark text-sm"></i>
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-[11px] text-gray-400 uppercase tracking-wide font-semibold">
+        <span id="visibleCount">{{ products|length }}</span> product{{ '' if products|length == 1 else 's' }}
+      </p>
+      <p class="text-[11px] text-gray-400">
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white text-[10px] font-mono">F2</kbd> focus search
+      </p>
+    </div>
+
+    <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {% for p in products %}
+      <button type="button"
+        class="product-card group text-left bg-white rounded-xl p-3 border border-gray-100 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200 active:scale-95"
+        data-id="{{ p._id }}"
+        data-name="{{ p.name|e }}"
+        data-price="{{ p.selling_price }}"
+        data-stock="{{ p.quantity }}"
+        data-search="{{ (p.name ~ ' ' ~ p.sku)|lower|e }}">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-white transition">
+            <i class="fas fa-pills text-xs"></i>
+          </div>
+          {% if p.quantity <= p.min_threshold %}
+          <span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">LOW</span>
+          {% endif %}
+        </div>
+        <p class="font-semibold text-sm text-gray-800 line-clamp-2 leading-snug">{{ p.name }}</p>
+        <p class="text-[11px] text-gray-400 truncate mt-0.5 font-mono">{{ p.sku }}</p>
+        <div class="flex items-center justify-between mt-2">
+          <p class="font-bold text-primary text-sm">{{ p.selling_price|ghs }}</p>
+          <p class="text-[10px] text-gray-400">×{{ p.quantity }}</p>
+        </div>
+      </button>
+      {% else %}
+      <div class="col-span-full p-10 text-center text-gray-400">
+        <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-capsules text-2xl text-gray-300"></i>
+        </div>
+        <p class="font-medium text-gray-500">No products available</p>
+        <p class="text-sm mt-1">Ask your pharmacist to add inventory.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div id="noProducts" class="hidden mt-10 text-center text-gray-400">
+      <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
+      <p class="text-sm font-medium">No products match your search.</p>
+    </div>
+  </section>
+
+  <!-- Cart -->
+  <aside class="w-full md:w-96 bg-white border-t md:border-t-0 md:border-l border-gray-200 flex flex-col flex-shrink-0 max-h-[60vh] md:max-h-none md:h-full shadow-lg md:shadow-none">
+
+    <!-- Cart header -->
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-gradient-to-r from-teal-50/40 to-white">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <i class="fas fa-shopping-cart text-sm"></i>
+        </div>
+        <div>
+          <h2 class="font-bold text-gray-800 text-sm">Current order</h2>
+          <p class="text-[11px] text-gray-400"><span id="cartCount">0</span> item<span id="cartPlural"></span></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="holdBtn" type="button"
+          class="text-[11px] text-gray-500 hover:text-primary transition flex items-center gap-1 px-2 py-2 rounded-lg hover:bg-primary/5"
+          title="Hold order (F4)">
+          <i class="fas fa-pause-circle"></i> Hold
+        </button>
+        <button id="clearCartBtn" type="button"
+          class="text-[11px] text-gray-500 hover:text-rose-500 transition flex items-center gap-1 px-2 py-2 rounded-lg hover:bg-rose-50"
+          title="Clear cart">
+          <i class="fas fa-trash-alt"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Cart items -->
+    <div id="cartItems" class="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div id="emptyCart" class="flex flex-col items-center justify-center h-full text-center py-10">
+        <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mb-3">
+          <i class="fas fa-cart-plus text-2xl text-gray-300"></i>
+        </div>
+        <p class="text-sm text-gray-400 font-medium">Cart is empty</p>
+        <p class="text-xs text-gray-300 mt-1">Click a product to add it.</p>
+      </div>
+    </div>
+
+    <!-- Totals + payment -->
+    <div class="border-t border-gray-100 px-4 py-4 space-y-3 flex-shrink-0 bg-gray-50/50">
+      <div class="space-y-1.5">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-500">Subtotal</span>
+          <span id="subtotal" class="text-gray-700 font-medium">GH₵ 0.00</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-500">VAT</span>
+          <span id="vat" class="text-gray-700 font-medium">GH₵ 0.00</span>
+        </div>
+        <div class="flex justify-between items-baseline pt-2 mt-2 border-t border-dashed border-gray-200">
+          <span class="font-bold text-gray-800">Total</span>
+          <span id="total" class="text-2xl font-extrabold text-primary tracking-tight">GH₵ 0.00</span>
+        </div>
+      </div>
+
+      <div>
+        <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2">Payment method</p>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" class="pm active flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 border-primary bg-primary/5 text-primary text-[11px] font-semibold transition-all" data-m="cash">
+            <i class="fas fa-money-bill-wave text-base"></i> Cash
+          </button>
+          <button type="button" class="pm flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-500 text-[11px] font-semibold hover:border-primary hover:text-primary transition-all" data-m="card">
+            <i class="fas fa-credit-card text-base"></i> Card
+          </button>
+          <button type="button" class="pm flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-500 text-[11px] font-semibold hover:border-primary hover:text-primary transition-all" data-m="momo">
+            <i class="fas fa-mobile-alt text-base"></i> MoMo
+          </button>
+        </div>
+      </div>
+
+      <button id="chargeBtn" type="button"
+        class="btn-primary w-full bg-primary hover:bg-primaryLight text-white font-bold py-4 rounded-xl mt-1 shadow-md transition-all
+               flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+        <i class="fas fa-check-circle"></i>
+        <span>Charge <span id="chargeAmount"></span></span>
+      </button>
+
+      <p class="text-[10px] text-gray-400 text-center">
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">F9</kbd> charge ·
+        <kbd class="px-1.5 py-0.5 rounded border border-gray-200 bg-white font-mono">Esc</kbd> clear
+      </p>
+    </div>
+  </aside>
+</div>
+
+<!-- Receipt modal -->
+<div id="receiptModal"
+  class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-[60] items-center justify-center p-4"
+  role="dialog" aria-modal="true" aria-labelledby="receiptTitle">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-pop">
+    <div class="bg-gradient-to-br from-primary to-primaryDark text-white text-center py-6 px-4 relative overflow-hidden">
+      <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 20% 30%, white 1.5px, transparent 1.5px), radial-gradient(circle at 80% 70%, white 1.5px, transparent 1.5px); background-size: 30px 30px;"></div>
+      <div class="relative">
+        <div class="w-14 h-14 mx-auto mb-2 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur">
+          <i class="fas fa-check text-3xl"></i>
+        </div>
+        <h3 id="receiptTitle" class="font-bold text-lg">{{ t_name(tenant) }}</h3>
+        <p class="text-xs text-teal-100 mt-1 font-mono">{{ t_code(tenant) }}</p>
+      </div>
+    </div>
+    <div class="p-5 text-sm" id="receiptBody"></div>
+    <div class="px-5 pb-5 grid grid-cols-2 gap-2">
+      <button type="button" onclick="closeReceipt()"
+        class="border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-semibold py-3 rounded-xl transition">
+        <i class="fas fa-times mr-1"></i> Close
+      </button>
+      <button type="button" onclick="window.print()"
+        class="btn-primary bg-primary hover:bg-primaryLight text-white text-sm font-bold py-3 rounded-xl transition">
+        <i class="fas fa-print mr-1"></i> Print
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.PHARMACOLE_POS = {
+    checkoutUrl: "{{ url_for('cashier.checkout') }}",
+    holdUrl: "{{ url_for('cashier.hold_order') }}",
+    csrfToken: "{{ csrf_token() }}",
+    cashierName: "{{ current_user.name|e }}",
+    initialCart: {{ (initial_cart if initial_cart is defined else [])|tojson }}
+  };
+
+  // ---- UX enhancements that don't clash with pos.js ----
+  (function () {
+    var search = document.getElementById('posSearch');
+    var clearSearch = document.getElementById('clearSearch');
+    var grid = document.getElementById('productGrid');
+    var noProducts = document.getElementById('noProducts');
+    var visibleCount = document.getElementById('visibleCount');
+
+    function applyFilter() {
+      if (!grid) return;
+      var q = (search && search.value ? search.value : '').toLowerCase().trim();
+      var visible = 0;
+      grid.querySelectorAll('.product-card').forEach(function (card) {
+        var match = !q || card.dataset.search.indexOf(q) !== -1;
+        card.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      if (noProducts) noProducts.classList.toggle('hidden', visible > 0);
+      if (visibleCount) visibleCount.textContent = visible;
+      if (clearSearch) clearSearch.classList.toggle('hidden', !q);
+    }
+
+    if (search) {
+      search.addEventListener('input', applyFilter);
+      // Auto-focus the search on page load for fast scanning
+      setTimeout(function () { search.focus(); }, 150);
+    }
+    if (clearSearch) {
+      clearSearch.addEventListener('click', function () {
+        if (search) { search.value = ''; search.focus(); applyFilter(); }
+      });
+    }
+
+    // Keyboard shortcuts (don't fight pos.js handlers — additive)
+    document.addEventListener('keydown', function (e) {
+      // F2 → focus search
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (search) search.focus();
+      }
+      // Escape → clear search if focused
+      if (e.key === 'Escape' && document.activeElement === search && search.value) {
+        e.preventDefault();
+        search.value = '';
+        applyFilter();
+      }
+      // F9 → click charge
+      if (e.key === 'F9') {
+        var btn = document.getElementById('chargeBtn');
+        if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
+      }
+    });
+
+    // Cart count plural
+    var cartCount = document.getElementById('cartCount');
+    var cartPlural = document.getElementById('cartPlural');
+    if (cartCount && cartPlural && window.MutationObserver) {
+      var obs = new MutationObserver(function () {
+        var n = parseInt(cartCount.textContent, 10) || 0;
+        cartPlural.textContent = n === 1 ? '' : 's';
+      });
+      obs.observe(cartCount, { childList: true, characterData: true, subtree: true });
+    }
+  })();
+</script>
+<script src="{{ url_for('static', filename='js/pos.js') }}"></script>
+{% endblock %}

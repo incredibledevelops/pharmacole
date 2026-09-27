@@ -1,0 +1,321 @@
+{% extends "owner/base.html" %}
+{% block title %}Employees · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Employees</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">Manage your pharmacy team</p>
+    </div>
+  </div>
+  <button onclick="openModal()" class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0">
+    <i class="fas fa-user-plus"></i>
+    <span class="hidden sm:inline">Add employee</span>
+    <span class="sm:hidden">Add</span>
+  </button>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+  {% set pharmacists = employees|selectattr('role','equalto','pharmacist')|list %}
+  {% set cashiers = employees|selectattr('role','equalto','cashier')|list %}
+  {% set active = employees|selectattr('is_active','equalto',True)|list %}
+
+  <!-- Stats -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 md:mb-6">
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total team</p>
+        <p class="text-2xl font-extrabold text-gray-800 mt-1">{{ employees|length }}</p>
+      </div>
+    </div>
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Active</p>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ active|length }}</p>
+      </div>
+    </div>
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-purple-400 to-violet-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Pharmacists</p>
+        <p class="text-2xl font-extrabold text-purple-600 mt-1">{{ pharmacists|length }}</p>
+      </div>
+    </div>
+    <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Cashiers</p>
+        <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ cashiers|length }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="px-4 md:px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <i class="fas fa-users text-sm"></i>
+        </span>
+        Team members
+      </h3>
+      <div class="relative w-full sm:w-64">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+        <input type="text" id="empSearch" placeholder="Search employees..."
+          class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+      </div>
+    </div>
+
+    <!-- Desktop table -->
+    <div class="hidden md:block overflow-x-auto table-scroll">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-5 py-3 text-left font-semibold">Employee</th>
+            <th class="px-5 py-3 text-left font-semibold">Role</th>
+            <th class="px-5 py-3 text-left font-semibold">Status</th>
+            <th class="px-5 py-3 text-left font-semibold">Joined</th>
+            <th class="px-5 py-3 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for e in employees %}
+          <tr class="emp-row hover:bg-gray-50/70 transition">
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  {{ e.full_name[:2]|upper }}
+                </div>
+                <div class="min-w-0">
+                  <p class="font-medium text-gray-800 truncate">{{ e.full_name }}</p>
+                  <p class="text-xs text-gray-400 truncate">{{ e.email }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-3.5">
+              {% if e.role == 'pharmacist' %}
+                <span class="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 font-semibold inline-flex items-center gap-1">
+                  <i class="fas fa-pills text-[9px]"></i> Pharmacist
+                </span>
+              {% elif e.role == 'cashier' %}
+                <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold inline-flex items-center gap-1">
+                  <i class="fas fa-cash-register text-[9px]"></i> Cashier
+                </span>
+              {% else %}
+                <span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold">{{ e.role }}</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3.5">
+              {% if e.is_active %}
+                <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold inline-flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                </span>
+              {% else %}
+                <span class="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600 font-semibold">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap">{{ e.created_at|nice_date }}</td>
+            <td class="px-5 py-3.5 text-right">
+              <form method="POST" action="{{ url_for('owner.toggle_employee', user_id=e._id) }}" class="inline" onsubmit="return confirm('Toggle status for {{ e.full_name|e }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="text-xs {% if e.is_active %}text-rose-500 hover:text-rose-700{% else %}text-emerald-600 hover:text-emerald-700{% endif %} hover:underline font-semibold inline-flex items-center gap-1 transition">
+                  <i class="fas fa-{% if e.is_active %}ban{% else %}check{% endif %} text-[10px]"></i>
+                  {% if e.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="px-5 py-16 text-center text-gray-400">
+              <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-users text-2xl text-gray-300"></i>
+              </div>
+              <p class="font-medium text-gray-500">No employees yet</p>
+              <p class="text-sm mt-1">Click <strong>Add employee</strong> to invite your team.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile list -->
+    <div class="md:hidden divide-y divide-gray-100">
+      {% for e in employees %}
+      <div class="emp-row p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {{ e.full_name[:2]|upper }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2 mb-1">
+              <p class="font-medium text-gray-800 truncate">{{ e.full_name }}</p>
+              {% if e.is_active %}
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold flex-shrink-0 inline-flex items-center gap-1">
+                  <span class="w-1 h-1 rounded-full bg-emerald-500"></span> Active
+                </span>
+              {% else %}
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 font-semibold flex-shrink-0">Inactive</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-gray-500 truncate">{{ e.email }}</p>
+            <div class="flex items-center justify-between mt-2 gap-2">
+              <div class="flex items-center gap-1.5 min-w-0">
+                {% if e.role == 'pharmacist' %}
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">Pharmacist</span>
+                {% elif e.role == 'cashier' %}
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Cashier</span>
+                {% endif %}
+                <span class="text-[10px] text-gray-400 truncate">· {{ e.created_at|nice_date }}</span>
+              </div>
+              <form method="POST" action="{{ url_for('owner.toggle_employee', user_id=e._id) }}" onsubmit="return confirm('Toggle status?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="text-xs {% if e.is_active %}text-rose-500{% else %}text-emerald-600{% endif %} font-semibold whitespace-nowrap">
+                  {% if e.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="p-10 text-center text-gray-400">
+        <i class="fas fa-users text-3xl mb-2 block text-gray-300"></i>
+        No employees yet.
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</main>
+
+<!-- Add employee modal -->
+<div id="addModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-[60] items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
+  <div class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-fade-up">
+
+    <div class="px-5 sm:px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <i class="fas fa-user-plus text-sm"></i>
+        </div>
+        <h3 id="addModalTitle" class="font-bold text-gray-800">Add new employee</h3>
+      </div>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-rose-500 hover:bg-rose-50 p-2 -mr-2 rounded-lg transition" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{{ url_for('owner.add_employee') }}" class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="emp_name" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-user text-primary text-[10px]"></i> Full name <span class="text-rose-500">*</span>
+          </label>
+          <input id="emp_name" name="full_name" required placeholder="Jane Doe"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+        </div>
+        <div>
+          <label for="emp_role" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-briefcase text-primary text-[10px]"></i> Role <span class="text-rose-500">*</span>
+          </label>
+          <select id="emp_role" name="role"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
+            <option value="cashier">Cashier</option>
+            <option value="pharmacist">Pharmacist</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label for="emp_email" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+          <i class="fas fa-envelope text-primary text-[10px]"></i> Email address <span class="text-rose-500">*</span>
+        </label>
+        <input id="emp_email" name="email" type="email" required placeholder="jane@greenhealth.com"
+          class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+      </div>
+
+      <div>
+        <label for="emp_phone" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+          <i class="fas fa-phone text-primary text-[10px]"></i> Phone
+        </label>
+        <input id="emp_phone" name="phone" type="tel" placeholder="+233 24 000 0000"
+          class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+      </div>
+
+      <div>
+        <label for="emp_password" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+          <i class="fas fa-lock text-primary text-[10px]"></i> Temporary password <span class="text-rose-500">*</span>
+        </label>
+        <div class="relative mt-1">
+          <input id="emp_password" name="password" type="password" minlength="6" required placeholder="At least 6 characters"
+            class="w-full px-4 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          <button type="button"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition p-1"
+            aria-label="Show password"
+            onclick="togglePwd('emp_password', this)">
+            <i class="fas fa-eye text-sm"></i>
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+          <i class="fas fa-info-circle"></i> Employee should change this after first login.
+        </p>
+      </div>
+
+      <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+        <button type="button" onclick="closeModal()" class="w-full sm:w-auto border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-medium px-5 py-3 sm:py-2.5 rounded-xl transition">
+          Cancel
+        </button>
+        <button type="submit" class="w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-6 py-3 sm:py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all inline-flex items-center justify-center gap-2">
+          <i class="fas fa-paper-plane"></i> Add employee
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function togglePwd(id, btn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var isPwd = el.type === 'password';
+    el.type = isPwd ? 'text' : 'password';
+    var icon = btn.querySelector('i');
+    if (icon) icon.className = isPwd ? 'fas fa-eye-slash text-sm' : 'fas fa-eye text-sm';
+  }
+
+  function openModal() {
+    var m = document.getElementById('addModal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { var f = document.getElementById('emp_name'); if (f) f.focus(); }, 100);
+  }
+  function closeModal() {
+    var m = document.getElementById('addModal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('addModal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+  // Live search
+  var empSearch = document.getElementById('empSearch');
+  if (empSearch) {
+    empSearch.addEventListener('input', function (e) {
+      var q = e.target.value.toLowerCase();
+      document.querySelectorAll('.emp-row').forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

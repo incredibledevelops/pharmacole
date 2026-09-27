@@ -1,0 +1,17 @@
+{
+  "name": "Pharmacole",
+  "short_name": "Pharmacole",
+  "description": "Multi-tenant pharmacy SaaS for Ghana",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d6e6e",
+  "theme_color": "#0d6e6e",
+  "icons": [
+    {
+      "src": "/static/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

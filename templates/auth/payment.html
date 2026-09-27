@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Complete your subscription · Pharmacole{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block head %}
+<link rel="canonical" href="{{ url_for('auth.payment', _external=True) }}">
+{% endblock %}
+
+{% block body %}
+
+<div class="min-h-screen relative flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-teal-50 via-white to-gray-50 overflow-hidden">
+
+  <!-- Decorative blobs -->
+  <div class="pointer-events-none absolute -top-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
+  <div class="pointer-events-none absolute -bottom-32 -right-32 w-96 h-96 bg-primaryLight/10 rounded-full blur-3xl"></div>
+
+  <div class="relative w-full max-w-lg animate-fade-up">
+
+    <div class="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-gray-100">
+
+      <!-- Progress -->
+      <div class="flex items-center justify-center gap-2 mb-6" aria-label="Signup progress">
+        <div class="flex items-center gap-2 opacity-50">
+          <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold flex items-center justify-center">
+            <i class="fas fa-check text-[10px]"></i>
+          </span>
+          <span class="text-xs font-semibold text-gray-500">Details</span>
+        </div>
+        <span class="w-8 h-px bg-primary"></span>
+        <div class="flex items-center gap-2">
+          <span class="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm">2</span>
+          <span class="text-xs font-semibold text-primary">Payment</span>
+        </div>
+        <span class="w-8 h-px bg-gray-300"></span>
+        <div class="flex items-center gap-2 opacity-50">
+          <span class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center">3</span>
+          <span class="text-xs font-semibold text-gray-500">Go live</span>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div class="text-center mb-6">
+        <div class="relative w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-credit-card text-primary text-2xl"></i>
+          <span class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] shadow-md">
+            <i class="fas fa-lock"></i>
+          </span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Activate your pharmacy</h1>
+        <p class="text-sm text-gray-500 mt-1 truncate px-2">
+          {{ tenant.pharmacy_name }} · <span class="font-mono text-primary font-semibold">{{ tenant.tenant_code }}</span>
+        </p>
+      </div>
+
+      <!-- Summary card -->
+      <div class="bg-gradient-to-br from-gray-50 to-teal-50/40 rounded-2xl p-5 mb-6 border border-gray-100">
+        <div class="flex justify-between text-sm mb-2.5">
+          <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-crown text-accent text-xs"></i> Plan</span>
+          <span class="font-semibold text-gray-800">Pharmacy Pro · Monthly</span>
+        </div>
+        <div class="flex justify-between text-sm mb-2.5">
+          <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-calendar-day text-primary text-xs"></i> Duration</span>
+          <span class="font-semibold text-gray-800">30 days</span>
+        </div>
+        <div class="flex justify-between text-sm mb-2.5">
+          <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-rotate text-primary text-xs"></i> Billing</span>
+          <span class="font-semibold text-gray-800">Manual · No auto-renewal</span>
+        </div>
+        <div class="border-t border-dashed border-gray-200 my-3"></div>
+        <div class="flex justify-between items-baseline">
+          <span class="text-gray-600 font-semibold inline-flex items-center gap-1.5">
+            <i class="fas fa-receipt text-primary text-sm"></i> Total due
+          </span>
+          <span class="text-3xl font-extrabold text-primary tracking-tight">GH₵ {{ "%.2f"|format(amount) }}</span>
+        </div>
+      </div>
+
+      <!-- Pay button -->
+      <button id="payBtn" type="button" aria-busy="false"
+        class="btn-primary w-full bg-primary hover:bg-primaryLight disabled:opacity-60 disabled:cursor-not-allowed
+               text-white font-bold py-4 rounded-xl shadow-md
+               flex items-center justify-center gap-2">
+        <i class="fas fa-lock"></i>
+        <span id="payBtnLabel">Pay GH₵ {{ "%.2f"|format(amount) }} with Paystack</span>
+      </button>
+
+      <!-- Error alert -->
+      <div id="payError" role="alert" aria-live="polite"
+        class="hidden mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3 items-start gap-2">
+        <i class="fas fa-exclamation-circle mt-0.5"></i>
+        <span id="payErrorMsg" class="flex-1"></span>
+        <button type="button" class="opacity-70 hover:opacity-100 transition -mr-1 -mt-1 p-1 rounded"
+          aria-label="Dismiss error"
+          onclick="document.getElementById('payError').classList.add('hidden');document.getElementById('payError').classList.remove('flex');">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Trust row -->
+      <div class="flex items-center justify-center gap-4 mt-5 text-[11px] text-gray-400">
+        <span class="inline-flex items-center gap-1"><i class="fas fa-shield-alt text-emerald-500"></i> Paystack secured</span>
+        <span class="inline-flex items-center gap-1"><i class="fas fa-ban text-primary"></i> No auto-charge</span>
+        <span class="inline-flex items-center gap-1"><i class="fas fa-headset text-primary"></i> Support</span>
+      </div>
+
+      <p class="text-xs text-gray-400 text-center mt-4 leading-relaxed">
+        By paying, you agree to Pharmacole's subscription terms. You renew manually each month.
+      </p>
+
+      <!-- Back link -->
+      <div class="text-center mt-5">
+        <a href="{{ url_for('main.redirect_dashboard') }}"
+          class="text-xs text-gray-500 hover:text-primary transition inline-flex items-center gap-1">
+          <i class="fas fa-arrow-left text-[10px]"></i> Back to dashboard
+        </a>
+      </div>
+    </div>
+
+    <!-- Help footer -->
+    <p class="text-center text-xs text-gray-400 mt-5">
+      Trouble paying? <a href="mailto:support@pharmacole.com" class="text-primary font-medium hover:underline">Contact support</a>
+    </p>
+  </div>
+</div>
+
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="{{ url_for('static', filename='js/payment.js') }}"></script>
+<script>
+  window.PHARMACOLE_PAYMENT = {
+    initUrl: "{{ url_for('payments.initialize') }}",
+    verifyUrl: "{{ url_for('payments.verify_ajax') }}",
+    dashUrl: "{{ url_for('main.redirect_dashboard') }}",
+    publicKey: "{{ paystack_public_key }}",
+    email: "{{ current_user.email }}",
+    tenantCode: "{{ tenant.tenant_code }}",
+    amount: {{ amount|float }},
+    csrfToken: "{{ csrf_token() }}"
+  };
+</script>
+<script>
+  (function () {
+    var cfg = window.PHARMACOLE_PAYMENT || {};
+    var btn = document.getElementById('payBtn');
+    var label = document.getElementById('payBtnLabel');
+    var errBox = document.getElementById('payError');
+    var errMsg = document.getElementById('payErrorMsg');
+
+    function showError(msg) {
+      if (!errBox || !errMsg) return;
+      errMsg.textContent = msg;
+      errBox.classList.remove('hidden');
+      errBox.classList.add('flex');
+    }
+
+    function setLoading(on, text) {
+      if (!btn) return;
+      btn.disabled = !!on;
+      btn.setAttribute('aria-busy', on ? 'true' : 'false');
+      if (label) {
+        label.innerHTML = on
+          ? '<i class="fas fa-circle-notch fa-spin"></i> ' + (text || 'Processing…')
+          : 'Pay GH₵ ' + (cfg.amount ? cfg.amount.toFixed(2) : '') + ' with Paystack';
+      }
+    }
+
+    // Expose helpers for payment.js
+    window.__pay = { showError: showError, setLoading: setLoading };
+
+    // Auto-init if payment.js defines initPaymentPage
+    if (typeof window.initPaymentPage === 'function') {
+      window.initPaymentPage(cfg);
+    }
+  })();
+</script>
+
+{% endblock %}

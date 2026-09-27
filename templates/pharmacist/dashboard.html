@@ -1,0 +1,141 @@
+{% extends "pharmacist/base.html" %}
+{% block title %}Dashboard · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openPharmSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Welcome, {{ current_user.name or 'Pharmacist' }} 👋</h1>
+      <p class="text-xs text-gray-400 truncate">{{ t_name(tenant) }} · <span class="font-mono">{{ t_code(tenant) }}</span></p>
+    </div>
+  </div>
+  <a href="{{ url_for('pharmacist.add_drug') }}"
+     class="hidden sm:inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex-shrink-0">
+    <i class="fas fa-plus"></i> Add drug
+  </a>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+  <!-- Stats -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 mb-5 md:mb-6">
+    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total SKUs</p>
+          <i class="fas fa-capsules text-primary"></i>
+        </div>
+        <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-800">{{ total_skus }}</p>
+        <p class="text-[11px] text-gray-400 mt-1">In inventory</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Low stock</p>
+          <i class="fas fa-triangle-exclamation text-amber-500"></i>
+        </div>
+        <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-amber-600">{{ low_stock|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-1">Below threshold</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-rose-400 to-pink-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Expiring ≤30d</p>
+          <i class="fas fa-clock text-rose-500"></i>
+        </div>
+        <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-rose-600">{{ expiring|length }}</p>
+        <p class="text-[11px] text-gray-400 mt-1">Needs attention</p>
+      </div>
+    </div>
+
+    <div class="group relative bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Pending Rx</p>
+          <i class="fas fa-file-prescription text-blue-500"></i>
+        </div>
+        <p class="text-xl sm:text-2xl md:text-3xl font-extrabold text-blue-600">{{ pending_rx }}</p>
+        <p class="text-[11px] text-gray-400 mt-1">Awaiting action</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center">
+            <i class="fas fa-triangle-exclamation text-sm"></i>
+          </span>
+          Low stock alerts
+        </h3>
+        {% if low_stock %}
+        <a href="{{ url_for('pharmacist.inventory') }}" class="text-xs text-primary hover:underline font-medium">View all →</a>
+        {% endif %}
+      </div>
+      <ul class="divide-y divide-gray-100 text-sm">
+        {% for i in low_stock %}
+        <li class="py-3 flex items-center gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
+          <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-boxes-stacked text-xs"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
+            <p class="text-xs text-amber-600">{{ i.quantity }} left · min {{ i.min_threshold }}</p>
+          </div>
+        </li>
+        {% else %}
+        <li class="py-8 text-center text-gray-400">
+          <i class="fas fa-circle-check text-2xl mb-2 block text-emerald-400"></i>
+          <p class="text-sm">No low stock alerts.</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center">
+            <i class="fas fa-clock text-sm"></i>
+          </span>
+          Expiring soon
+        </h3>
+        {% if expiring %}
+        <a href="{{ url_for('pharmacist.expiry') }}" class="text-xs text-primary hover:underline font-medium">View all →</a>
+        {% endif %}
+      </div>
+      <ul class="divide-y divide-gray-100 text-sm">
+        {% for i in expiring %}
+        <li class="py-3 flex items-center gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
+          <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-hourglass-half text-xs"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="font-medium truncate text-gray-800">{{ i.name }}</p>
+            <p class="text-xs text-rose-600">Expires {{ i.expiry_date|nice_date }}</p>
+          </div>
+        </li>
+        {% else %}
+        <li class="py-8 text-center text-gray-400">
+          <i class="fas fa-circle-check text-2xl mb-2 block text-emerald-400"></i>
+          <p class="text-sm">No expiring drugs in the next 30 days.</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</main>
+{% endblock %}

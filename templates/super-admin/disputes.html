@@ -1,0 +1,169 @@
+{% extends "super-admin/base.html" %}
+{% block title %}Disputes · Super Admin{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openSASidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Disputes</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">Billing disputes and flags</p>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+  {% set open_count = disputes|selectattr('status','equalto','open')|list|length %}
+  {% set resolved_count = disputes|selectattr('status','equalto','resolved')|list|length %}
+  {% set other_count = disputes|length - open_count - resolved_count %}
+
+  {% if disputes %}
+  <!-- Stats -->
+  <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
+    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
+      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">Open</p>
+      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ open_count }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Needs attention</p>
+    </div>
+    <div class="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 shadow-sm border border-emerald-100/60">
+      <p class="text-[11px] text-emerald-600 uppercase tracking-wide font-semibold">Resolved</p>
+      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ resolved_count }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Closed cleanly</p>
+    </div>
+    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">Other</p>
+      <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ other_count }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Rejected / etc.</p>
+    </div>
+  </div>
+
+  <!-- Search + filter -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+      <input type="text" id="dispSearch" placeholder="Search subject, tenant, or description..."
+        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+    </div>
+    <select id="dispFilter"
+      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary">
+      <option value="">All statuses</option>
+      <option value="open">Open</option>
+      <option value="resolved">Resolved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for d in disputes %}
+    <article class="disp-card group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-lg hover:border-primary/20 transition-all duration-300"
+      data-status="{{ d.status or 'open' }}"
+      data-search="{{ ((d.subject or '') ~ ' ' ~ (d.tenant_code or '') ~ ' ' ~ (d.description or ''))|lower|e }}">
+
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
+            {% if d.status == 'open' %}bg-amber-50 text-amber-600
+            {% elif d.status == 'resolved' %}bg-emerald-50 text-emerald-600
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            <i class="fas fa-{% if d.status == 'open' %}triangle-exclamation{% elif d.status == 'resolved' %}circle-check{% else %}circle-xmark{% endif %}"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate">{{ d.subject or 'Dispute' }}</p>
+            <p class="text-[11px] text-gray-400 mt-0.5 inline-flex items-center gap-1">
+              <i class="fas fa-calendar text-[9px]"></i> {{ d.created_at|nice_date }}
+              {% if d.tenant_code %} · <span class="font-mono">{{ d.tenant_code }}</span>{% endif %}
+            </p>
+          </div>
+        </div>
+        <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
+          {% if d.status == 'open' %}bg-amber-100 text-amber-700
+          {% elif d.status == 'resolved' %}bg-emerald-100 text-emerald-700
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {% if d.status == 'open' %}
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Open
+          {% elif d.status == 'resolved' %}
+            <i class="fas fa-check text-[9px]"></i> Resolved
+          {% else %}
+            {{ (d.status or 'open')|capitalize }}
+          {% endif %}
+        </span>
+      </div>
+
+      {% if d.description %}
+      <p class="text-sm text-gray-600 mb-4 leading-relaxed line-clamp-4">{{ d.description }}</p>
+      {% endif %}
+
+      {% if d.status == 'open' %}
+      <div class="flex gap-2 pt-1">
+        <form method="POST" action="{{ url_for('super_admin.set_dispute_status', dispute_id=d._id) }}" class="flex-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="resolved">
+          <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+            <i class="fas fa-check"></i> Resolve
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('super_admin.set_dispute_status', dispute_id=d._id) }}" class="flex-1"
+          onsubmit="return confirm('Reject this dispute?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="rejected">
+          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+            <i class="fas fa-xmark"></i> Reject
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <p class="text-[11px] text-gray-400 pt-1">
+        <i class="fas fa-lock text-[9px] mr-1"></i>
+        {{ 'Resolved and closed' if d.status == 'resolved' else 'Rejected — no action needed' }}
+      </p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  <div id="dispNoResults" class="hidden mt-10 text-center text-gray-400">
+    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
+    <p class="text-sm font-medium">No disputes match your filters.</p>
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-circle-check text-3xl text-emerald-500"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">All clear!</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">No disputes need your attention right now. New disputes from tenants will show up here.</p>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var search = document.getElementById('dispSearch');
+    var filter = document.getElementById('dispFilter');
+    var noResults = document.getElementById('dispNoResults');
+    if (!search && !filter) return;
+
+    function apply() {
+      var q = (search && search.value ? search.value : '').toLowerCase().trim();
+      var f = filter ? filter.value : '';
+      var visible = 0;
+      document.querySelectorAll('.disp-card').forEach(function (card) {
+        var ms = !q || (card.dataset.search || '').indexOf(q) !== -1;
+        var mf = !f || card.dataset.status === f;
+        var show = ms && mf;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    }
+    if (search) search.addEventListener('input', apply);
+    if (filter) filter.addEventListener('change', apply);
+  })();
+</script>
+{% endblock %}

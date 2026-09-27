@@ -1,0 +1,39 @@
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div id="flash-container"
+         class="fixed top-4 right-4 left-4 sm:left-auto sm:right-4 z-[100] space-y-2 max-w-sm sm:max-w-md sm:ml-auto"
+         role="alert" aria-live="polite">
+      {% for cat, msg in messages %}
+        {% set styles = {
+          'success': ('bg-emerald-500', 'check-circle'),
+          'danger':  ('bg-rose-500',    'exclamation-circle'),
+          'warning': ('bg-amber-500',   'exclamation-triangle'),
+          'info':    ('bg-sky-500',     'info-circle')
+        } %}
+        {% set style = styles.get(cat, ('bg-slate-700', 'info-circle')) %}
+        <div class="flash-item animate-slide-in px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-start gap-3 text-white {{ style[0] }}"
+             data-flash>
+          <i class="fas fa-{{ style[1] }} mt-0.5 text-base"></i>
+          <span class="flex-1 leading-snug">{{ msg }}</span>
+          <button type="button"
+                  class="opacity-70 hover:opacity-100 transition -mr-1 -mt-1 p-1 rounded-lg hover:bg-white/20"
+                  aria-label="Dismiss notification"
+                  onclick="this.closest('[data-flash]').remove()">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+    <script>
+      // Auto-dismiss flashes after 6s
+      setTimeout(function () {
+        document.querySelectorAll('[data-flash]').forEach(function (el) {
+          el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+          el.style.opacity = '0';
+          el.style.transform = 'translateX(30px)';
+          setTimeout(function () { el.remove(); }, 400);
+        });
+      }, 6000);
+    </script>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,106 @@
+pharmacole/
+├── .env.example
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── wsgi.py
+├── run.py
+├── config.py
+├── extensions.py
+├── utils.py
+├── decorators.py
+├── models.py
+│
+├── app/
+│   ├── __init__.py                    # create_app factory
+│   ├── errors.py                      # error handlers
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── tenant_service.py
+│   │   ├── user_service.py
+│   │   ├── inventory_service.py
+│   │   ├── sales_service.py
+│   │   ├── payments_service.py
+│   │   ├── supplier_service.py
+│   │   ├── prescription_service.py
+│   │   ├── held_order_service.py
+│   │   └── dispute_service.py
+│   └── blueprints/
+│       ├── __init__.py
+│       ├── auth.py
+│       ├── main.py
+│       ├── owner.py
+│       ├── pharmacist.py
+│       ├── cashier.py
+│       ├── super_admin.py
+│       ├── payments.py
+│       └── webhooks.py
+│
+├── templates/
+│   ├── base.html                      # public base
+│   ├── landing.html
+│   ├── auth/
+│   │   ├── login.html
+│   │   ├── signup.html
+│   │   └── payment.html
+│   ├── errors/
+│   │   ├── 403.html
+│   │   ├── 404.html
+│   │   ├── 429.html
+│   │   ├── 500.html
+│   │   └── subscription_locked.html
+│   ├── owner/
+│   │   ├── base.html
+│   │   ├── dashboard.html
+│   │   ├── employees.html
+│   │   ├── inventory.html
+│   │   ├── reports.html
+│   │   ├── subscription.html
+│   │   └── suppliers.html
+│   ├── pharmacist/
+│   │   ├── base.html
+│   │   ├── dashboard.html
+│   │   ├── add_drug.html
+│   │   ├── inventory.html
+│   │   ├── expiry.html
+│   │   └── prescription.html
+│   ├── cashier/
+│   │   ├── base.html
+│   │   ├── pos.html
+│   │   ├── shift_report.html
+│   │   └── held_orders.html
+│   └── super-admin/
+│       ├── base.html
+│       ├── dashboard.html
+│       ├── tenants.html
+│       ├── tenant_detail.html
+│       ├── billing.html
+│       └── disputes.html
+│
+├── static/
+│   ├── css/
+│   │   └── app.css
+│   ├── js/
+│   │   ├── app.js
+│   │   ├── pos.js
+│   │   └── payment.js
+│   ├── favicon.ico
+│   ├── logo.svg
+│   ├── manifest.json
+│   ├── og-image.png
+│   ├── robots.txt
+│   └── sitemap.xml
+│
+├── scripts/
+│   ├── seed_super_admin.py
+│   ├── ensure_indexes.py
+│   └── reset_db.py
+│
+└── tests/
+    ├── conftest.py
+    ├── test_auth.py
+    ├── test_owner.py
+    ├── test_pharmacist.py
+    ├── test_cashier.py
+    ├── test_super_admin.py
+    └── test_payments.py

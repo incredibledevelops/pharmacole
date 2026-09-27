@@ -1,0 +1,187 @@
+{% extends "super-admin/base.html" %}
+{% block title %}Tenants · Super Admin{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openSASidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">All tenants</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">{{ total }} registered pharmacies</p>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+  {% if tenants %}
+  <!-- Search -->
+  <div class="mb-5 flex items-center justify-between gap-3">
+    <p class="text-xs text-gray-500 font-medium">
+      <span id="visibleCount">{{ tenants|length }}</span> of {{ total }} shown
+    </p>
+    <div class="relative w-48 sm:w-72">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+      <input type="text" id="tenantSearch" placeholder="Search pharmacy, code, or owner email..."
+        class="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+
+    <!-- Desktop table -->
+    <div class="hidden md:block overflow-x-auto table-scroll">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+          <tr>
+            <th class="px-5 py-3 text-left font-semibold">Pharmacy</th>
+            <th class="px-5 py-3 text-left font-semibold">Code</th>
+            <th class="px-5 py-3 text-left font-semibold">Owner</th>
+            <th class="px-5 py-3 text-left font-semibold">Status</th>
+            <th class="px-5 py-3 text-left font-semibold">Expires</th>
+            <th class="px-5 py-3 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for t in tenants %}
+          <tr class="tenant-row hover:bg-gray-50/70 transition"
+            data-search="{{ (t.pharmacy_name ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  {{ t.pharmacy_name[:2]|upper if t.pharmacy_name else '??' }}
+                </div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-gray-800 truncate">{{ t.pharmacy_name }}</p>
+                  <p class="text-[11px] text-gray-400 truncate">{{ t.address or '—' }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-3.5 text-gray-500 font-mono text-xs">{{ t.tenant_code }}</td>
+            <td class="px-5 py-3.5 text-gray-600 text-xs truncate max-w-[200px]">{{ t.owner_email }}</td>
+            <td class="px-5 py-3.5">
+              <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
+                {% if t.subscription_status=='active' %}bg-emerald-100 text-emerald-700
+                {% elif t.subscription_status=='pending' %}bg-amber-100 text-amber-700
+                {% else %}bg-rose-100 text-rose-700{% endif %}">
+                {% if t.subscription_status == 'active' %}
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                {% elif t.subscription_status == 'pending' %}
+                  <i class="fas fa-clock text-[9px]"></i> Pending
+                {% else %}
+                  <i class="fas fa-lock text-[9px]"></i> Expired
+                {% endif %}
+              </span>
+            </td>
+            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">{{ t.subscription_expires_at|nice_date }}</td>
+            <td class="px-5 py-3.5 text-right">
+              <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
+                 class="text-xs text-primary hover:underline font-semibold inline-flex items-center gap-1">
+                View <i class="fas fa-arrow-right text-[9px]"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-5 py-16 text-center text-gray-400">
+              <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-building text-2xl text-gray-300"></i>
+              </div>
+              <p class="font-medium text-gray-500">No tenants registered yet</p>
+              <p class="text-sm mt-1">Pharmacies will appear here once they sign up.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile list -->
+    <div class="md:hidden divide-y divide-gray-100">
+      {% for t in tenants %}
+      <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t._id) }}"
+         class="tenant-row block p-4 hover:bg-gray-50 transition"
+         data-search="{{ (t.pharmacy_name ~ ' ' ~ (t.tenant_code or '') ~ ' ' ~ (t.owner_email or ''))|lower|e }}">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-100 to-teal-50 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {{ t.pharmacy_name[:2]|upper if t.pharmacy_name else '??' }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="font-semibold text-gray-800 truncate">{{ t.pharmacy_name }}</p>
+                <p class="text-xs text-gray-400 font-mono mt-0.5">{{ t.tenant_code }}</p>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap flex-shrink-0
+                {% if t.subscription_status=='active' %}bg-emerald-100 text-emerald-700
+                {% elif t.subscription_status=='pending' %}bg-amber-100 text-amber-700
+                {% else %}bg-rose-100 text-rose-700{% endif %}">
+                {{ t.subscription_status }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-500 truncate mt-1">{{ t.owner_email }}</p>
+            <p class="text-[11px] text-gray-400 mt-1 inline-flex items-center gap-1">
+              <i class="fas fa-calendar text-[9px]"></i> Expires {{ t.subscription_expires_at|nice_date }}
+            </p>
+          </div>
+        </div>
+      </a>
+      {% else %}
+      <div class="p-10 text-center text-gray-400">
+        <i class="fas fa-building text-3xl mb-2 block text-gray-300"></i>
+        No tenants registered yet.
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div id="tenantNoResults" class="hidden mt-10 text-center text-gray-400">
+    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
+    <p class="text-sm font-medium">No tenants match your search.</p>
+  </div>
+
+  {% if has_next or page > 1 %}
+  <div class="flex justify-center items-center gap-3 mt-6">
+    {% if page > 1 %}
+      <a href="{{ url_for('super_admin.tenants', page=page-1) }}"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 text-sm text-gray-600 font-semibold transition">
+        <i class="fas fa-arrow-left text-xs"></i> Prev
+      </a>
+    {% endif %}
+    <span class="text-xs text-gray-400 font-medium">Page {{ page }}</span>
+    {% if has_next %}
+      <a href="{{ url_for('super_admin.tenants', page=page+1) }}"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary hover:bg-primaryLight text-white text-sm font-semibold shadow-sm hover:shadow-md transition">
+        Next <i class="fas fa-arrow-right text-xs"></i>
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var search = document.getElementById('tenantSearch');
+    var noResults = document.getElementById('tenantNoResults');
+    var visibleCount = document.getElementById('visibleCount');
+    if (!search) return;
+
+    search.addEventListener('input', function () {
+      var q = this.value.toLowerCase().trim();
+      var visible = 0;
+      document.querySelectorAll('.tenant-row').forEach(function (row) {
+        var match = !q || (row.dataset.search || '').indexOf(q) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      if (noResults) noResults.classList.toggle('hidden', visible > 0);
+      if (visibleCount) visibleCount.textContent = visible;
+    });
+  })();
+</script>
+{% endblock %}

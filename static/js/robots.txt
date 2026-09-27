@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /owner/
+Disallow: /pharmacist/
+Disallow: /cashier/
+Disallow: /super-admin/
+Disallow: /auth/login
+Disallow: /auth/payment
+Disallow: /payments/
+Disallow: /subscription/
+Disallow: /healthz
+
+Sitemap: https://pharmacole.com/sitemap.xml

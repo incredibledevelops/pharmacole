@@ -1,0 +1,139 @@
+{% extends "pharmacist/base.html" %}
+{% block title %}Expiry Tracker · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openPharmSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Expiry Tracker</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">Medicines grouped by time-to-expiry</p>
+    </div>
+  </div>
+  <button onclick="window.print()"
+    class="hidden sm:flex bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition items-center gap-2">
+    <i class="fas fa-print"></i> Print
+  </button>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 animate-fade-in">
+
+  {% set all_total = (buckets['30']|length) + (buckets['60']|length) + (buckets['90']|length) %}
+
+  <!-- Summary -->
+  <div class="grid grid-cols-3 gap-3 sm:gap-4">
+    <div class="bg-gradient-to-br from-rose-50 to-white rounded-2xl p-4 shadow-sm border border-rose-100/60">
+      <p class="text-[11px] text-rose-600 uppercase tracking-wide font-semibold">≤ 30 days</p>
+      <p class="text-2xl sm:text-3xl font-extrabold text-rose-600 mt-1">{{ buckets['30']|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Urgent</p>
+    </div>
+    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
+      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">31 – 60 days</p>
+      <p class="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">{{ buckets['60']|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Plan ahead</p>
+    </div>
+    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">61 – 90 days</p>
+      <p class="text-2xl sm:text-3xl font-extrabold text-gray-700 mt-1">{{ buckets['90']|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Monitor</p>
+    </div>
+  </div>
+
+  {% if all_total == 0 %}
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-circle-check text-3xl text-emerald-500"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">All clear</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">No medicines are expiring in the next 90 days. Keep up the great stock rotation!</p>
+  </div>
+  {% else %}
+
+  {% set buckets_list = [
+    ('30 days', buckets['30'], 'rose',  'fa-triangle-exclamation', 'Urgent — remove or return soon'),
+    ('60 days', buckets['60'], 'amber', 'fa-clock',                'Plan promotions or returns'),
+    ('90 days', buckets['90'], 'gray',  'fa-hourglass-half',       'Monitor and rotate stock')
+  ] %}
+
+  {% for label, items, tone, icon, sub in buckets_list %}
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2
+      {% if tone == 'rose' %}bg-gradient-to-r from-rose-50 to-white
+      {% elif tone == 'amber' %}bg-gradient-to-r from-amber-50 to-white
+      {% else %}bg-gradient-to-r from-gray-50 to-white{% endif %}">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+          {% if tone == 'rose' %}bg-rose-100 text-rose-600
+          {% elif tone == 'amber' %}bg-amber-100 text-amber-600
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          <i class="fas {{ icon }}"></i>
+        </span>
+        <div class="min-w-0">
+          <h3 class="font-semibold
+            {% if tone == 'rose' %}text-rose-700{% elif tone == 'amber' %}text-amber-700{% else %}text-gray-700{% endif %}">
+            Expiring in {{ label }}
+          </h3>
+          <p class="text-[11px] text-gray-400">{{ sub }}</p>
+        </div>
+      </div>
+      <span class="self-start sm:self-center text-xs px-3 py-1 rounded-full font-semibold whitespace-nowrap
+        {% if tone == 'rose' %}bg-rose-200 text-rose-800
+        {% elif tone == 'amber' %}bg-amber-200 text-amber-800
+        {% else %}bg-gray-200 text-gray-700{% endif %}">
+        {{ items|length }} item{{ '' if items|length == 1 else 's' }}
+      </span>
+    </div>
+
+    {% if items %}
+    <div class="divide-y divide-gray-100">
+      {% for i in items %}
+      <div class="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/70 transition">
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
+            {% if tone == 'rose' %}bg-rose-50 text-rose-600
+            {% elif tone == 'amber' %}bg-amber-50 text-amber-600
+            {% else %}bg-gray-50 text-gray-600{% endif %}">
+            <i class="fas fa-capsules"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate">{{ i.name }}</p>
+            <p class="text-xs text-gray-400 truncate mt-0.5 font-mono">
+              SKU: {{ i.sku }}{% if i.batch_number %} · Batch: {{ i.batch_number }}{% endif %}
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 sm:gap-6 text-sm flex-shrink-0 pl-13 sm:pl-0">
+          <div>
+            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Quantity</p>
+            <p class="font-semibold text-gray-800">{{ i.quantity }}</p>
+          </div>
+          <div>
+            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Expiry</p>
+            <p class="font-semibold
+              {% if tone == 'rose' %}text-rose-600{% elif tone == 'amber' %}text-amber-600{% else %}text-gray-700{% endif %}">
+              {{ i.expiry_date|nice_date }}
+            </p>
+          </div>
+          <div>
+            <p class="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Value</p>
+            <p class="font-semibold text-primary whitespace-nowrap">{{ (i.selling_price * i.quantity)|ghs }}</p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-gray-400 text-sm">
+      <i class="fas fa-circle-check text-xl mb-2 block text-emerald-400"></i>
+      No items expiring in this window.
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends "owner/base.html" %}
+{% block title %}Sales &amp; Reports · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Sales &amp; Reports</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">Full transaction history · exportable to CSV</p>
+    </div>
+  </div>
+  <div class="flex gap-2 flex-shrink-0">
+    <a href="{{ url_for('owner.export_csv') }}"
+       class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2">
+      <i class="fas fa-file-csv"></i>
+      <span class="hidden sm:inline">Export CSV</span>
+    </a>
+    <button onclick="window.print()" class="hidden sm:flex bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition items-center gap-2">
+      <i class="fas fa-print"></i> Print
+    </button>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+  <!-- Summary -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-5 md:mb-6">
+    <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total revenue</p>
+          <i class="fas fa-coins text-primary"></i>
+        </div>
+        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.revenue|ghs }}</p>
+        <p class="text-xs text-gray-400 mt-1">From {{ summary.transactions }} transactions</p>
+      </div>
+    </div>
+    <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-blue-400 to-indigo-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Average sale</p>
+          <i class="fas fa-chart-simple text-blue-500"></i>
+        </div>
+        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.average|ghs }}</p>
+        <p class="text-xs text-gray-400 mt-1">Per transaction</p>
+      </div>
+    </div>
+    <div class="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+      <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-purple-400 to-violet-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Transactions</p>
+          <i class="fas fa-receipt text-purple-500"></i>
+        </div>
+        <p class="text-2xl sm:text-3xl font-extrabold text-gray-800">{{ summary.transactions }}</p>
+        <p class="text-xs text-gray-400 mt-1">All-time count</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 md:mb-6 flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+      <input type="text" id="reportSearch" placeholder="Search receipt, cashier, or method..."
+        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+    </div>
+    <select id="paymentFilter"
+      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white">
+      <option value="">All payment methods</option>
+      <option value="cash">Cash</option>
+      <option value="card">Card</option>
+      <option value="momo">Mobile Money</option>
+    </select>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <!-- Desktop table -->
+    <div class="hidden md:block overflow-x-auto table-scroll">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-5 py-3 text-left font-semibold">Receipt</th>
+            <th class="px-5 py-3 text-left font-semibold">Date</th>
+            <th class="px-5 py-3 text-left font-semibold">Cashier</th>
+            <th class="px-5 py-3 text-left font-semibold">Items</th>
+            <th class="px-5 py-3 text-left font-semibold">Payment</th>
+            <th class="px-5 py-3 text-right font-semibold">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for s in sales %}
+          <tr class="report-row hover:bg-gray-50/70 transition" data-method="{{ s.payment_method }}">
+            <td class="px-5 py-3.5 font-semibold text-gray-800 whitespace-nowrap font-mono text-xs">{{ s.receipt_no }}</td>
+            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap">{{ s.timestamp|nice_datetime }}</td>
+            <td class="px-5 py-3.5 text-gray-600 truncate max-w-[150px]">{{ s.cashier_name }}</td>
+            <td class="px-5 py-3.5 text-gray-600">{{ s.items|length }}</td>
+            <td class="px-5 py-3.5">
+              {% if s.payment_method == 'cash' %}
+                <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold inline-flex items-center gap-1">
+                  <i class="fas fa-money-bill-wave text-[9px]"></i> Cash
+                </span>
+              {% elif s.payment_method == 'card' %}
+                <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold inline-flex items-center gap-1">
+                  <i class="fas fa-credit-card text-[9px]"></i> Card
+                </span>
+              {% else %}
+                <span class="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 font-semibold inline-flex items-center gap-1">
+                  <i class="fas fa-mobile-screen text-[9px]"></i> Mobile Money
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3.5 text-right font-semibold text-gray-800 whitespace-nowrap">{{ s.total_amount|ghs }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-5 py-16 text-center text-gray-400">
+              <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-receipt text-2xl text-gray-300"></i>
+              </div>
+              <p class="font-medium text-gray-500">No sales recorded yet</p>
+              <p class="text-sm mt-1">Transactions will appear here once you start selling.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile list -->
+    <div class="md:hidden divide-y divide-gray-100">
+      {% for s in sales %}
+      <div class="report-row p-4" data-method="{{ s.payment_method }}">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate font-mono text-xs">{{ s.receipt_no }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">{{ s.timestamp|nice_datetime }}</p>
+          </div>
+          <p class="font-bold text-primary whitespace-nowrap">{{ s.total_amount|ghs }}</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+          <span><i class="fas fa-user mr-1 text-gray-400"></i>{{ s.cashier_name }}</span>
+          <span class="text-gray-300">·</span>
+          <span>{{ s.items|length }} items</span>
+          <span class="text-gray-300">·</span>
+          {% if s.payment_method == 'cash' %}
+            <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Cash</span>
+          {% elif s.payment_method == 'card' %}
+            <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">Card</span>
+          {% else %}
+            <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">MoMo</span>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="p-10 text-center text-gray-400">
+        <i class="fas fa-receipt text-3xl mb-2 block text-gray-300"></i>
+        No sales recorded yet.
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div id="reportNoResults" class="hidden mt-10 text-center text-gray-400">
+    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
+    <p class="text-sm font-medium">No transactions match your filters.</p>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var search = document.getElementById('reportSearch');
+    var payment = document.getElementById('paymentFilter');
+    var noResults = document.getElementById('reportNoResults');
+
+    function filter() {
+      var q = (search && search.value ? search.value : '').toLowerCase().trim();
+      var m = payment ? payment.value : '';
+      var visible = 0;
+      document.querySelectorAll('.report-row').forEach(function (row) {
+        var ms = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        var mp = !m || row.dataset.method === m;
+        var show = ms && mp;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    }
+    if (search) search.addEventListener('input', filter);
+    if (payment) payment.addEventListener('change', filter);
+  })();
+</script>
+{% endblock %}

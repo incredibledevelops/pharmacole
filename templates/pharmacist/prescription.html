@@ -1,0 +1,169 @@
+{% extends "pharmacist/base.html" %}
+{% block title %}Prescriptions · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openPharmSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition" aria-label="Open menu">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Prescriptions</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block" id="rxCount">{{ prescriptions|length }} records</p>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+
+  {% set pending = prescriptions|selectattr('status','equalto','pending')|list %}
+  {% set dispensed = prescriptions|selectattr('status','equalto','dispensed')|list %}
+  {% set cancelled = prescriptions|selectattr('status','equalto','cancelled')|list %}
+
+  {% if prescriptions %}
+  <!-- Stats -->
+  <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
+    <div class="bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 shadow-sm border border-amber-100/60">
+      <p class="text-[11px] text-amber-600 uppercase tracking-wide font-semibold">Pending</p>
+      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ pending|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Awaiting action</p>
+    </div>
+    <div class="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 shadow-sm border border-emerald-100/60">
+      <p class="text-[11px] text-emerald-600 uppercase tracking-wide font-semibold">Dispensed</p>
+      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ dispensed|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Completed</p>
+    </div>
+    <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <p class="text-[11px] text-gray-600 uppercase tracking-wide font-semibold">Cancelled</p>
+      <p class="text-2xl font-extrabold text-gray-700 mt-1">{{ cancelled|length }}</p>
+      <p class="text-[11px] text-gray-400 mt-1">Not dispensed</p>
+    </div>
+  </div>
+
+  <!-- Search + filter -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+      <input type="text" id="rxSearch" placeholder="Search patient, doctor, or notes..."
+        class="pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary w-full">
+    </div>
+    <select id="rxFilter"
+      class="text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary">
+      <option value="">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="dispensed">Dispensed</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="rxGrid">
+    {% for rx in prescriptions %}
+    <article class="rx-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md hover:border-primary/20 transition-all duration-300"
+      data-status="{{ rx.status }}"
+      data-search="{{ ((rx.patient_name or '') ~ ' ' ~ (rx.doctor_name or '') ~ ' ' ~ (rx.notes or ''))|lower }}">
+
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
+            {% if rx.status == 'pending' %}bg-amber-50 text-amber-600
+            {% elif rx.status == 'dispensed' %}bg-emerald-50 text-emerald-600
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            <i class="fas fa-file-prescription"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate">{{ rx.patient_name or 'Unknown patient' }}</p>
+            <p class="text-xs text-gray-400 truncate">Dr. {{ rx.doctor_name or '—' }}</p>
+          </div>
+        </div>
+        <span class="text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap inline-flex items-center gap-1
+          {% if rx.status == 'pending' %}bg-amber-100 text-amber-700
+          {% elif rx.status == 'dispensed' %}bg-emerald-100 text-emerald-700
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {% if rx.status == 'pending' %}
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Pending
+          {% elif rx.status == 'dispensed' %}
+            <i class="fas fa-check text-[9px]"></i> Dispensed
+          {% else %}
+            Cancelled
+          {% endif %}
+        </span>
+      </div>
+
+      <p class="text-[11px] text-gray-400 mb-3 inline-flex items-center gap-1">
+        <i class="fas fa-calendar-day text-[10px]"></i> Received {{ rx.created_at|nice_date }}
+      </p>
+
+      {% if rx.notes %}
+      <p class="text-xs text-gray-600 italic border-l-2 border-gray-200 pl-3 mb-3 leading-relaxed">{{ rx.notes }}</p>
+      {% endif %}
+
+      {% if rx.status == 'pending' %}
+      <div class="flex gap-2 pt-1">
+        <form method="POST" action="{{ url_for('pharmacist.set_prescription_status', rx_id=rx._id) }}" class="flex-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="dispensed">
+          <button class="w-full bg-primary hover:bg-primaryLight text-white text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+            <i class="fas fa-check"></i> Dispense
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('pharmacist.set_prescription_status', rx_id=rx._id) }}" class="flex-1"
+          onsubmit="return confirm('Cancel this prescription?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="cancelled">
+          <button class="w-full border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs font-semibold py-2.5 rounded-lg transition inline-flex items-center justify-center gap-1.5">
+            <i class="fas fa-xmark"></i> Cancel
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <p class="text-[11px] text-gray-400 pt-1">
+        <i class="fas fa-lock text-[9px] mr-1"></i>
+        {{ 'Dispensed and closed' if rx.status == 'dispensed' else 'Cancelled — no action needed' }}
+      </p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  <div id="rxNoResults" class="hidden mt-10 text-center text-gray-400">
+    <i class="fas fa-search text-3xl mb-2 block text-gray-300"></i>
+    <p class="text-sm font-medium">No prescriptions match your filters.</p>
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 py-16 px-4 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fas fa-file-prescription text-3xl text-primary"></i>
+    </div>
+    <p class="text-gray-700 font-semibold text-lg">No prescriptions yet</p>
+    <p class="text-gray-400 text-sm mt-1 max-w-sm mx-auto">Incoming prescriptions from doctors will show up here for you to review and dispense.</p>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var search = document.getElementById('rxSearch');
+    var filter = document.getElementById('rxFilter');
+    var noResults = document.getElementById('rxNoResults');
+
+    function apply() {
+      var q = (search && search.value ? search.value : '').toLowerCase().trim();
+      var f = filter ? filter.value : '';
+      var visible = 0;
+      document.querySelectorAll('.rx-card').forEach(function (card) {
+        var ms = !q || card.dataset.search.indexOf(q) !== -1;
+        var mf = !f || card.dataset.status === f;
+        var show = ms && mf;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    }
+    if (search) search.addEventListener('input', apply);
+    if (filter) filter.addEventListener('change', apply);
+  })();
+</script>
+{% endblock %}

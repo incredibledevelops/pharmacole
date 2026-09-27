@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Subscription locked · Pharmacole{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block body %}
+
+<div class="min-h-screen relative flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-rose-50 via-white to-gray-50 overflow-hidden">
+
+  <!-- Decorative blobs -->
+  <div class="pointer-events-none absolute -top-32 -left-32 w-96 h-96 bg-rose-200/40 rounded-full blur-3xl"></div>
+  <div class="pointer-events-none absolute -bottom-32 -right-32 w-96 h-96 bg-primaryLight/10 rounded-full blur-3xl"></div>
+
+  <div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-8 text-center border border-gray-100 animate-fade-up">
+
+    <!-- Brand -->
+    <a href="{{ url_for('main.landing') }}" class="inline-flex items-center gap-2 mb-6 group" aria-label="Pharmacole home">
+      <span class="relative">
+        <i class="fas fa-prescription-bottle-medical text-2xl text-primary transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"></i>
+        <span class="absolute -top-1 -right-1 w-2 h-2 bg-accent rounded-full animate-pulse-soft"></span>
+      </span>
+      <span class="font-extrabold text-xl text-gray-800">Pharma<span class="text-primary">cole</span></span>
+    </a>
+
+    <!-- Lock icon -->
+    <div class="relative w-20 h-20 mx-auto mb-5">
+      <div class="absolute inset-0 bg-gradient-to-br from-rose-200 to-rose-50 rounded-full blur-xl opacity-70"></div>
+      <div class="relative w-20 h-20 rounded-full bg-gradient-to-br from-rose-100 to-rose-50 flex items-center justify-center ring-1 ring-rose-200">
+        <i class="fas fa-lock text-rose-500 text-2xl"></i>
+      </div>
+    </div>
+
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Workspace locked</h1>
+
+    <p class="text-sm text-gray-500 mb-5 leading-relaxed">
+      {% if tenant %}
+        Your subscription for <strong class="text-gray-700">{{ tenant.pharmacy_name }}</strong>
+        has expired. The entire workspace — owner, pharmacists, and cashiers — is locked until renewed.
+      {% else %}
+        Your workspace is locked. Please renew your subscription to continue.
+      {% endif %}
+    </p>
+
+    {% if current_user.is_authenticated %}
+      <div class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 text-gray-600 text-xs font-medium px-3 py-2 rounded-full mb-6">
+        <span class="w-6 h-6 rounded-full bg-gradient-to-br from-primaryLight to-primary text-white text-[10px] font-bold flex items-center justify-center">
+          {{ (current_user.name or 'U')[:2]|upper }}
+        </span>
+        {{ current_user.name }}
+        <span class="text-gray-300">·</span>
+        <span class="text-gray-500">{{ current_user.role|capitalize }}</span>
+      </div>
+    {% endif %}
+
+    {% if current_user.is_authenticated and current_user.role == 'owner' %}
+      <form method="POST" action="{{ url_for('main.renew_subscription') }}" class="mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn-primary w-full bg-primary hover:bg-primaryLight text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2">
+          <i class="fas fa-sync-alt"></i>
+          Renew now · {{ tenant.subscription_amount|ghs if tenant else 'GH₵ 500' }}
+        </button>
+      </form>
+      <p class="text-[11px] text-gray-400 mb-4 inline-flex items-center justify-center gap-1">
+        <i class="fas fa-shield-alt"></i> Secure payment via Paystack · No auto-renewal
+      </p>
+    {% else %}
+      <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4 mb-4 text-left flex items-start gap-2">
+        <i class="fas fa-info-circle mt-0.5 flex-shrink-0"></i>
+        <span>Please ask your pharmacy owner to renew the subscription. Your data is safe and will be restored once renewed.</span>
+      </div>
+    {% endif %}
+
+    <a href="{{ url_for('auth.logout') }}"
+       class="block mt-2 text-xs text-gray-400 hover:text-primary transition inline-flex items-center justify-center gap-1">
+      <i class="fas fa-sign-out-alt text-[10px]"></i> Sign out
+    </a>
+
+    <p class="text-[11px] text-gray-400 mt-4">
+      Questions? <a href="mailto:support@pharmacole.com" class="text-primary hover:underline font-medium">Contact support</a>
+    </p>
+  </div>
+</div>
+
+{% endblock %}

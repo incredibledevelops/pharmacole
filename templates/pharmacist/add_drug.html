@@ -1,0 +1,341 @@
+{% extends "pharmacist/base.html" %}
+{% block title %}Add Drug · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <a href="{{ url_for('pharmacist.inventory') }}"
+       class="text-gray-500 hover:text-primary hover:bg-primary/5 p-2 -ml-2 rounded-lg transition"
+       aria-label="Back to inventory">
+      <i class="fas fa-arrow-left"></i>
+    </a>
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Add new drug</h1>
+      <p class="text-xs text-gray-400 truncate hidden sm:block">Create a new inventory item</p>
+    </div>
+  </div>
+  <span class="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+    <i class="fas fa-circle-info text-primary"></i> Fields marked <span class="text-rose-500 font-bold">*</span> are required
+  </span>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+  <form method="POST" action="{{ url_for('pharmacist.add_drug') }}" class="max-w-4xl mx-auto space-y-5" id="drugForm" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Basic info -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-gradient-to-r from-teal-50/60 to-white">
+        <span class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-info-circle"></i>
+        </span>
+        <div>
+          <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Basic information</h2>
+          <p class="text-[11px] text-gray-400">Identify the drug and how it's sold</p>
+        </div>
+      </div>
+      <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <div class="md:col-span-2">
+          <label for="name" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-pills text-primary text-[10px]"></i> Drug name <span class="text-rose-500">*</span>
+          </label>
+          <input id="name" name="name" required placeholder="e.g. Paracetamol 500mg"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+        </div>
+
+        <div>
+          <label for="category" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-tag text-primary text-[10px]"></i> Category
+          </label>
+          <select id="category" name="category"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
+            <option value="">Select category</option>
+            <option>Antibiotic</option>
+            <option>Analgesic</option>
+            <option>Supplement</option>
+            <option>Respiratory</option>
+            <option>Diabetes</option>
+            <option>First aid</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="dosage_form" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-capsules text-primary text-[10px]"></i> Dosage form
+          </label>
+          <select id="dosage_form" name="dosage_form"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
+            <option value="">Select form</option>
+            <option>Tablet</option>
+            <option>Capsule</option>
+            <option>Syrup</option>
+            <option>Injection</option>
+            <option>Ointment</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="sku" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-barcode text-primary text-[10px]"></i> SKU / Barcode <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative mt-1">
+            <input id="sku" name="sku" required placeholder="e.g. PCM-500-012"
+              class="w-full px-4 pr-11 py-3 border border-gray-200 rounded-xl text-sm font-mono outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+            <button type="button" onclick="generateSku()"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition p-2 rounded-lg hover:bg-primary/5"
+              title="Generate SKU" aria-label="Generate SKU">
+              <i class="fas fa-wand-magic-sparkles text-sm"></i>
+            </button>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-1">Must be unique within your pharmacy.</p>
+        </div>
+
+        <div>
+          <label for="pack_size" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-box text-primary text-[10px]"></i> Pack size
+          </label>
+          <input id="pack_size" name="pack_size" placeholder="e.g. 100 tablets"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-gradient-to-r from-amber-50/60 to-white">
+        <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-coins"></i>
+        </span>
+        <div>
+          <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Pricing</h2>
+          <p class="text-[11px] text-gray-400">Set cost, selling price and tax</p>
+        </div>
+      </div>
+      <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label for="cost_price" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-arrow-down text-primary text-[10px]"></i> Cost price (GH₵)
+          </label>
+          <div class="relative mt-1">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium">GH₵</span>
+            <input id="cost_price" name="cost_price" type="number" step="0.01" min="0" placeholder="0.00"
+              class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          </div>
+        </div>
+
+        <div>
+          <label for="selling_price" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-arrow-up text-primary text-[10px]"></i> Selling price (GH₵) <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative mt-1">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium">GH₵</span>
+            <input id="selling_price" name="selling_price" type="number" step="0.01" min="0" required placeholder="0.00"
+              class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          </div>
+          <p id="marginHint" class="text-[11px] text-gray-400 mt-1">Margin will appear here</p>
+        </div>
+
+        <div>
+          <label for="tax_rate" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-percent text-primary text-[10px]"></i> Tax rate (%)
+          </label>
+          <div class="relative mt-1">
+            <input id="tax_rate" name="tax_rate" type="number" min="0" max="100" step="0.1" value="5" placeholder="5"
+              class="w-full pl-4 pr-10 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                     focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium">%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stock & batch -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-gradient-to-r from-blue-50/60 to-white">
+        <span class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-boxes-stacked"></i>
+        </span>
+        <div>
+          <h2 class="font-semibold text-gray-800 text-sm sm:text-base">Stock &amp; batch details</h2>
+          <p class="text-[11px] text-gray-400">Initial quantity, expiry and supplier</p>
+        </div>
+      </div>
+      <div class="p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <div>
+          <label for="quantity" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-cubes text-primary text-[10px]"></i> Quantity in stock <span class="text-rose-500">*</span>
+          </label>
+          <input id="quantity" name="quantity" type="number" min="0" required placeholder="0"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+        </div>
+
+        <div>
+          <label for="min_threshold" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-gauge-simple-high text-primary text-[10px]"></i> Minimum threshold
+          </label>
+          <input id="min_threshold" name="min_threshold" type="number" min="0" value="10" placeholder="10"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          <p class="text-[11px] text-gray-400 mt-1">You'll be alerted when stock falls below this.</p>
+        </div>
+
+        <div>
+          <label for="batch_number" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-hashtag text-primary text-[10px]"></i> Batch number
+          </label>
+          <input id="batch_number" name="batch_number" placeholder="e.g. PCM-8842"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+        </div>
+
+        <div>
+          <label for="expiry_date" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-calendar-day text-primary text-[10px]"></i> Expiry date <span class="text-rose-500">*</span>
+          </label>
+          <input id="expiry_date" name="expiry_date" type="date" required
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300">
+          <p id="expiryHint" class="text-[11px] mt-1 h-4"></p>
+        </div>
+
+        <div class="md:col-span-2">
+          <label for="supplier" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-truck text-primary text-[10px]"></i> Supplier
+          </label>
+          <select id="supplier" name="supplier"
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300 bg-white">
+            <option value="">— Select supplier —</option>
+            {% for s in suppliers %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
+          </select>
+          {% if not suppliers %}
+          <p class="text-[11px] text-gray-400 mt-1">
+            <i class="fas fa-circle-info mr-1"></i> No suppliers yet — you can add one from the owner dashboard.
+          </p>
+          {% endif %}
+        </div>
+
+        <div class="md:col-span-2">
+          <label for="description" class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <i class="fas fa-note-sticky text-primary text-[10px]"></i> Description / notes
+          </label>
+          <textarea id="description" name="description" rows="3" maxlength="500"
+            placeholder="Optional storage instructions, dosage notes, etc."
+            class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition resize-none
+                   focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-gray-300"></textarea>
+          <p class="text-[11px] text-gray-400 mt-1 text-right"><span id="descCount">0</span>/500</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pb-6 sticky bottom-0 sm:static bg-gray-100/80 backdrop-blur sm:bg-transparent pt-3 sm:pt-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <a href="{{ url_for('pharmacist.inventory') }}"
+         class="w-full sm:w-auto text-center border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-600 text-sm font-semibold px-6 py-3 rounded-xl transition">
+        Cancel
+      </a>
+      <button type="submit" id="saveBtn"
+        class="btn-primary w-full sm:w-auto bg-primary hover:bg-primaryLight text-white text-sm font-bold px-8 py-3 rounded-xl shadow-md transition-all
+               inline-flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+        <span id="saveBtnLabel" class="inline-flex items-center gap-2">
+          <i class="fas fa-save"></i> Save drug
+        </span>
+      </button>
+    </div>
+  </form>
+</main>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    // Live margin calculator
+    var cost = document.getElementById('cost_price');
+    var price = document.getElementById('selling_price');
+    var hint = document.getElementById('marginHint');
+
+    function updateMargin() {
+      var c = parseFloat(cost.value) || 0;
+      var p = parseFloat(price.value) || 0;
+      if (!p || !c) {
+        hint.textContent = 'Margin will appear here';
+        hint.className = 'text-[11px] text-gray-400 mt-1';
+        return;
+      }
+      var margin = ((p - c) / p) * 100;
+      var tone = margin >= 30 ? 'text-emerald-600' : margin >= 15 ? 'text-amber-600' : 'text-rose-500';
+      hint.textContent = 'Margin: ' + margin.toFixed(1) + '% · Profit ' + (p - c).toFixed(2) + ' per unit';
+      hint.className = 'text-[11px] ' + tone + ' mt-1 font-medium';
+    }
+    if (cost && price) {
+      cost.addEventListener('input', updateMargin);
+      price.addEventListener('input', updateMargin);
+    }
+
+    // Expiry hint
+    var expiry = document.getElementById('expiry_date');
+    var expiryHint = document.getElementById('expiryHint');
+    if (expiry) {
+      expiry.addEventListener('change', function () {
+        if (!this.value) { expiryHint.textContent = ''; return; }
+        var d = new Date(this.value);
+        var days = Math.ceil((d - new Date()) / 86400000);
+        if (days < 0) {
+          expiryHint.textContent = 'This date is in the past.';
+          expiryHint.className = 'text-[11px] mt-1 text-rose-500 font-medium';
+        } else if (days <= 30) {
+          expiryHint.textContent = 'Expires in ' + days + ' days — will trigger expiry alerts.';
+          expiryHint.className = 'text-[11px] mt-1 text-rose-500 font-medium';
+        } else if (days <= 90) {
+          expiryHint.textContent = 'Expires in ' + days + ' days.';
+          expiryHint.className = 'text-[11px] mt-1 text-amber-600 font-medium';
+        } else {
+          expiryHint.textContent = 'Expires in ' + days + ' days.';
+          expiryHint.className = 'text-[11px] mt-1 text-emerald-600 font-medium';
+        }
+      });
+    }
+
+    // Description counter
+    var desc = document.getElementById('description');
+    var descCount = document.getElementById('descCount');
+    if (desc && descCount) {
+      desc.addEventListener('input', function () { descCount.textContent = this.value.length; });
+    }
+
+    // Generate SKU
+    window.generateSku = function () {
+      var nameInput = document.getElementById('name');
+      var skuInput = document.getElementById('sku');
+      var base = (nameInput.value || 'DRG').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'DRG';
+      var rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+      var num = String(Math.floor(Math.random() * 900) + 100);
+      skuInput.value = base + '-' + num + '-' + rand;
+      skuInput.focus();
+    };
+
+    // Submit loading state
+    var form = document.getElementById('drugForm');
+    var btn = document.getElementById('saveBtn');
+    var label = document.getElementById('saveBtnLabel');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        if (!form.checkValidity()) return;
+        btn.disabled = true;
+        label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Saving drug…';
+      });
+    }
+  })();
+</script>
+{% endblock %}
