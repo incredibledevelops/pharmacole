@@ -98,6 +98,17 @@
       border-radius: 0 3px 3px 0;
     }
 
+    /* Mobile-friendly bottom of sidebar (safe area) */
+    .sidebar-bottom {
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Sidebar uses dynamic viewport height so nothing hides below the fold on mobile */
+    .sidebar-dvh {
+      height: 100vh;
+      height: 100dvh;
+    }
+
     @media print {
       aside, header button, .no-print { display: none !important; }
       main { padding: 0 !important; }
@@ -129,7 +140,7 @@
 
   <!-- Sidebar -->
   <aside id="ownerSidebar"
-         class="sidebar-drawer fixed md:static md:translate-x-0 inset-y-0 left-0 z-50 w-72 md:w-64 flex flex-col bg-sidebar text-gray-300 flex-shrink-0 h-screen md:shadow-xl">
+         class="sidebar-drawer sidebar-dvh fixed md:static md:translate-x-0 inset-y-0 left-0 z-50 w-72 md:w-64 flex flex-col bg-sidebar text-gray-300 flex-shrink-0 md:shadow-xl">
 
     <!-- Brand -->
     <div class="h-16 flex items-center justify-between px-5 border-b border-gray-700/60 flex-shrink-0">
@@ -212,25 +223,43 @@
       </a>
     </nav>
 
-    <!-- User -->
-    <div class="p-3 border-t border-gray-700/60 flex items-center gap-3 flex-shrink-0">
-      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-primaryLight to-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
-        {{ (current_user.name or 'OW')[:2]|upper }}
+    <!-- User block (redesigned) -->
+    <div class="sidebar-bottom p-3 border-t border-gray-700/60 flex-shrink-0">
+
+      <!-- User info card -->
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primaryLight to-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md ring-2 ring-primaryLight/20">
+          {{ (current_user.name or 'OW')[:2]|upper }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-white truncate">{{ current_user.name or 'Owner' }}</p>
+          <p class="text-[11px] text-primaryLight truncate font-medium">
+            <i class="fas fa-user-tie text-[9px] mr-1"></i> Owner
+          </p>
+        </div>
       </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-white truncate">{{ current_user.name or 'Owner' }}</p>
-        <p class="text-[11px] text-gray-500">Owner</p>
-      </div>
+
+      <!-- Logout button — prominent & always reachable -->
       <a href="{{ url_for('auth.logout') }}"
-         class="text-gray-500 hover:text-rose-400 p-2 -mr-2 rounded-lg hover:bg-gray-800 transition"
-         title="Log out" aria-label="Log out">
-        <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+         onclick="return confirm('Log out of Pharmacole?')"
+         class="w-full flex items-center justify-center gap-2 bg-rose-500/10 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/30 hover:border-rose-500 text-sm font-semibold py-2.5 rounded-lg transition-all duration-200 group">
+        <i class="fas fa-sign-out-alt group-hover:translate-x-0.5 transition-transform" aria-hidden="true"></i>
+        Log out
       </a>
     </div>
   </aside>
 
   <!-- Main content -->
   <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+    <!-- Mobile floating logout (visible only on phones) — always reachable -->
+    <a href="{{ url_for('auth.logout') }}"
+       onclick="return confirm('Log out of Pharmacole?')"
+       class="md:hidden fixed top-3 right-3 z-40 w-10 h-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg ring-2 ring-white/40 active:scale-95 transition"
+       aria-label="Log out" title="Log out">
+      <i class="fas fa-sign-out-alt"></i>
+    </a>
+
     {% block body %}{% endblock %}
   </div>
 </div>

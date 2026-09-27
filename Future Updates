@@ -1,0 +1,322 @@
+# Feature Recommendations for Pharmacole
+
+Here's a prioritized roadmap of features that would meaningfully strengthen Pharmacole — grouped by impact and effort, and tailored to Ghana's pharmacy context.
+
+---
+
+## 🎯 Tier 1 — High Impact, Ship Next
+
+These plug real gaps that pharmacies in Ghana hit every day.
+
+### 1. **NHIS Claims & Insurance Management**
+Ghana's National Health Insurance Scheme is huge. Pharmacies process NHIS claims manually today, which is painful.
+- Track NHIS claim submissions per sale
+- Status: pending / approved / rejected / paid
+- Auto-populate claim forms with NHIS drug codes
+- Reconcile NHIS payments against outstanding claims
+- Support for private insurers (Acacia, Nationwide, etc.)
+
+**Why:** This is a killer differentiator. No local competitor does this well.
+
+### 2. **Batch-Level Inventory Tracking**
+Right now inventory is item-level. Real pharmacies track **batches** with separate expiry + cost per batch.
+- Multiple batches per SKU, each with own expiry, cost, supplier, quantity
+- FIFO consumption (sell oldest first)
+- Batch-level profit calculation
+- Recalls: "batch PCM-8842 is recalled → show affected sales"
+
+**Why:** You already store `batch_number`. Making it a first-class entity improves accuracy, audit trails, and margins.
+
+### 3. **Drug Interaction & Allergy Warnings at POS**
+When a cashier adds a drug to the cart, check it against:
+- Other drugs already in the cart
+- Patient's recorded allergies (if customer profile exists)
+- Controlled-substance flags
+
+Show a modal: *"⚠️ Amoxicillin + Warfarin — bleeding risk. Confirm?"*
+
+**Why:** Patient safety + legal protection. Positions Pharmacole as compliant-grade software.
+
+### 4. **Customer / Patient Profiles**
+Currently the POS is anonymous. Add:
+- Quick customer lookup by phone at POS
+- Purchase history per customer
+- Allergy flags
+- Loyalty points (see Tier 2)
+- Age/gender for regulatory reporting
+
+**Why:** Enables everything below — loyalty, NHIS linking, refill reminders.
+
+### 5. **Refill & Expiry SMS/WhatsApp Reminders**
+Ghana is mobile-first. WhatsApp Business API + SMS are cheap and effective.
+- **Customer refills:** "Your 30-day supply of Metformin ends in 3 days. Reply YES to reorder."
+- **Owner alerts:** "Batch PCM-8842 expires in 30 days — 48 units, GH₵ 240 value."
+- Daily digest at 7am.
+
+**Why:** Massive engagement driver. Turns Pharmacole from software into a business partner.
+
+---
+
+## 🎯 Tier 2 — Strong Additions
+
+### 6. **Loyalty Program**
+- Points per cedi spent
+- Tiered discounts (Bronze / Silver / Gold)
+- Redeem points at POS via phone number
+- Birthday discounts
+- Owner dashboard shows "Top 20 customers this month"
+
+### 7. **Multi-Branch Support**
+Currently one tenant = one pharmacy. Real owners run 3–10 branches.
+- Branches under one owner account
+- Consolidated reporting across branches
+- Stock transfers between branches
+- Per-branch cashier / pharmacist assignment
+- Owner picks which branch to log into
+
+### 8. **Purchase Orders & Supplier Orders**
+Bridges the gap between "supplier exists" and "stock arrives":
+- Create PO → send to supplier (email/WhatsApp/PDF)
+- Track PO status: draft / sent / partial / received
+- Auto-update stock on goods-received
+- Supplier performance: on-time delivery %, quality
+
+### 9. **Stock Take / Physical Count Mode**
+- Snap a "count sheet" for a category
+- Cashier/pharmacist enters physical counts
+- System shows variance vs expected
+- Approval flow: pharmacist submits → owner approves
+- Auto-adjust stock with audit trail
+
+**Why:** Pharmacies do this monthly. Today it's paper-based. Huge time saver.
+
+### 10. **Prescription Scanning / OCR**
+Currently prescriptions are text entries. Add:
+- Upload photo of handwritten prescription
+- OCR extracts doctor name, drugs, dosages
+- Pharmacist verifies and converts to sale
+- Attach image to the prescription record
+
+**Why:** Ghanaian prescriptions are mostly handwritten. This is a real pain point.
+
+### 11. **Offline Mode for POS**
+Ghana internet is unreliable. POS must work offline.
+- Service worker caches products
+- Sales queue locally, sync when online
+- Conflict resolution (stock adjustments)
+- Offline receipt printing still works
+
+**Why:** If a cashier can't sell when internet drops, they'll abandon the system.
+
+### 12. **Drug Database Auto-Population**
+When adding a drug, autocomplete from:
+- Ghana FDA drug registry
+- WHO essential medicines
+- Common Ghanaian brand names (e.g., "Kina", "Cofsils")
+
+Auto-fill: dosage form, standard pack sizes, typical category.
+
+**Why:** Speeds up onboarding dramatically — pharmacist types "para" → 3 options with correct details.
+
+---
+
+## 🎯 Tier 3 — Nice to Have
+
+### 13. **Analytics & Forecasting**
+- Sales forecast next 30 days per SKU
+- "You'll run out of Amoxicillin in 12 days at current rate"
+- Dead stock report (no sales in 90 days)
+- Profit per category / supplier / brand
+- Best-performing hours / days
+- Export to Excel / Google Sheets
+
+### 14. **Controlled Substance Log**
+Ghana FDA requires tracking for narcotics, tramadol, codeine.
+- Flag controlled drugs in inventory
+- Require double signature on sale
+- Auto-generate monthly regulatory report
+- Print-ready logbook
+
+### 15. **Shift Management & Cash Reconciliation**
+Extends the current shift report:
+- Opening cash count + photo
+- Closing cash count + expected vs actual
+- Variance log with reason
+- Cashier sign-off, owner approval
+- Multi-shift tracking (morning / afternoon / night)
+
+### 16. **Receipt & Invoice Customization**
+- Upload pharmacy logo
+- Custom receipt header/footer with TIN / business reg no.
+- Branded PDF invoices for wholesale customers
+- Email/WhatsApp receipt after sale
+
+### 17. **Wholesale / Bulk Pricing**
+Currently only retail price. Add:
+- Wholesale price tier
+- Quantity breaks ("Buy 10+ get 8% off")
+- Customer type: retail / wholesale / hospital
+- Separate POS mode for wholesale
+
+### 18. **Refund & Return Workflow**
+Right now stock adjustments are manual. Proper flow:
+- Look up original receipt
+- Select items to return
+- Auto-calculate refund
+- Restock (or flag as damaged)
+- Print credit note
+- Log reason + cashier
+
+### 19. **Employee Permissions Matrix**
+Instead of fixed roles, let owner customize:
+- Can cashier apply discounts above 5%?
+- Can pharmacist delete inventory?
+- Can cashier view profit margins?
+- Time-based access (only during shift hours)
+
+### 20. **Audit Log**
+Every sensitive action logged:
+- Who changed price from X to Y, when
+- Who deleted a drug
+- Who applied a stock adjustment
+- IP + device fingerprint
+- Searchable by user, action, date
+
+**Why:** Critical for disputes and internal theft detection — both common in pharmacies.
+
+### 21. **PWA / Installable App**
+Make Pharmacole installable on phone/tablet:
+- Home screen icon
+- Full-screen POS mode
+- Push notifications for alerts
+- Offline support (see #11)
+
+**Why:** Small effort, big perceived-value jump. Feels like a native app.
+
+### 22. **Multi-Currency for Border Towns**
+Pharmacies near Togo / Côte d'Ivoire deal in CFA + GHS.
+- Sell in GHS, display secondary currency
+- Daily exchange rate entry
+- Reports in either currency
+
+### 23. **Public API for Integrations**
+- REST endpoints for inventory, sales, customers
+- Webhooks on sale.completed, stock.low, subscription.expired
+- API keys per tenant
+- Enables integrations with accounting software (QuickBooks, Sage), e-commerce, delivery platforms
+
+### 24. **Insurance Claims Portal (Self-Service)**
+- Customer uploads insurance card at POS
+- Auto-submit claim to insurer
+- Track claim status from customer app
+- Reconcile payments
+
+---
+
+## 🎯 Tier 4 — Long-Term / Ambitious
+
+### 25. **Teleconsult Integration**
+- Patient video-calls a doctor from within Pharmacole
+- Doctor writes e-prescription → lands in pharmacist queue
+- Revenue share model
+
+### 26. **AI-Powered Insights**
+- "Sales dropped 15% on Mondays — investigate"
+- "Best day to restock is Tuesday (based on supplier delivery patterns)"
+- "This customer is likely to churn — send them a 10% offer"
+- Natural-language queries: "How much did I make on antibiotics last month?"
+
+### 27. **Marketplace / Group Buying**
+- Connect pharmacies with verified suppliers
+- Volume discounts when 10+ pharmacies order together
+- Pharmacole takes a small cut
+- Creates a new revenue stream
+
+### 28. **Franchise / Chain Management**
+For large chains (e.g., DanAdams, Kama):
+- Central catalog management
+- Push prices to all branches
+- Consolidated procurement
+- Cross-branch reporting
+- Regional manager dashboards
+
+### 29. **Mobile App for Owners**
+Native iOS/Android:
+- Real-time dashboard
+- Push alerts for critical events
+- Approve stock takes remotely
+- View shift reports from anywhere
+
+### 30. **Regulatory Compliance Suite**
+- Auto-generate Ghana FDA reports
+- Controlled substance register
+- Expired drug disposal log
+- Temperature/humidity logs for cold-chain drugs
+- Staff license expiry tracking
+
+---
+
+## 🎯 Quick Wins (Low Effort, High Delight)
+
+If you want to ship 3 things this week that users will notice immediately:
+
+1. **PWA install banner** — turns your web app into a phone-installable one in ~1 hour.
+2. **WhatsApp share receipt** — one-click send receipt to customer's phone. Ghanaians love WhatsApp.
+3. **Keyboard shortcuts on POS** (F2 search, F9 charge, Esc clear) — already started in my previous rewrite; just document them in a help modal.
+4. **Dark mode** — free with Tailwind, cashiers love it at night.
+5. **Barcode scanner support** — most USB/Bluetooth scanners act as keyboards; just make sure POS search field is always focused.
+
+---
+
+## 💡 Strategic Recommendations
+
+### Build vs Partner
+- **Don't build** SMS/WhatsApp infrastructure — partner with Hubtel, Arkesel, or Twilio.
+- **Don't build** payments — you're using Paystack, stick with it.
+- **Don't build** accounting — expose an API and let QuickBooks / Sage integrate.
+- **Do build** pharmacy-specific features: NHIS, batch tracking, interactions, controlled substances. That's your moat.
+
+### Pricing Tiers to Consider
+- **Starter** — GH₵ 300/mo, 1 branch, 2 users
+- **Pro** — GH₵ 500/mo, 1 branch, unlimited users *(current)*
+- **Business** — GH₵ 1,200/mo, up to 5 branches, consolidated reporting
+- **Enterprise** — custom, 5+ branches, API access, SLA
+
+### Retention Levers
+The features that make pharmacies **never want to leave**:
+1. Customer purchase history
+2. Loyalty points
+3. NHIS claims history
+4. Batch history (audit trail)
+5. Historical reports across years
+
+Every month they use Pharmacole, the cost of switching increases.
+
+---
+
+## 📊 My Recommended 6-Month Roadmap
+
+| Month | Focus | Features |
+|---|---|---|
+| **1** | Retention | Customer profiles, loyalty points, WhatsApp receipts |
+| **2** | Compliance | NHIS claims, controlled substance log, audit log |
+| **3** | Accuracy | Batch-level inventory, stock take mode, expiry alerts |
+| **4** | Scale | Multi-branch, purchase orders, supplier performance |
+| **5** | Reliability | Offline POS, PWA, mobile app (owner) |
+| **6** | Moat | Drug database, AI insights, public API |
+
+---
+
+## 🚀 My Top 3 for You Specifically
+
+If I had to pick **only three** to build next, given where Pharmacole is today:
+
+1. **Customer profiles + WhatsApp refill reminders** — transforms the product from a tool into a growth engine for pharmacies. Very Ghana-appropriate.
+
+2. **Batch-level inventory + FIFO** — you already have the data structure; making batches first-class fixes real margin leakage and enables recalls/audits.
+
+3. **NHIS claims module** — this is your wedge. Every serious Ghanaian pharmacy deals with NHIS daily, and no SaaS handles it elegantly. Own this and you own the market.
+
+---
+
+Want me to write the code for any of these? I can start with **customer profiles + WhatsApp refill reminders** (Tier 1, #4 + #5) since that combination gives the biggest immediate product jump, or jump straight to **NHIS claims** if you want to lead with differentiation.
