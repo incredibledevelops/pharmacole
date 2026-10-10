@@ -1,0 +1,107 @@
+{% extends "owner/base.html" %}
+{% block title %}Audit Log · {{ t_name(tenant) }}{% endblock %}
+{% block body %}
+<header class="h-16 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 gap-3 sticky top-0 z-30">
+  <div class="flex items-center gap-3 min-w-0">
+    <button onclick="openSidebar()" class="md:hidden text-gray-600 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition">
+      <i class="fas fa-bars text-lg"></i>
+    </button>
+    <div>
+      <h1 class="text-base sm:text-lg font-bold text-gray-800">Audit Log</h1>
+      <p class="text-xs text-gray-400">Every sensitive action · searchable</p>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-4 md:p-6">
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
+    <input id="auditSearch" placeholder="Search action, target, meta…" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+    <select id="auditAction" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
+      <option value="">All actions</option>
+    </select>
+    <input id="auditFrom" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+    <input id="auditTo" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+    <button id="auditApply" class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold">Apply</button>
+  </div>
+
+  <div id="auditList" class="space-y-2">
+    <p class="text-sm text-gray-400 text-center py-10">Loading…</p>
+  </div>
+</main>
+
+<script>
+const API_BASE = '{{ url_for("api.me") }}'.replace('/auth/me', '');
+let API_TOKEN = localStorage.getItem('pharmacole_api_token') || '';
+
+async function ensureToken() {
+  if (API_TOKEN) return API_TOKEN;
+  // mint a short-lived session token via a helper endpoint (added below in main.py)
+  const r = await fetch('/api/session-token', { credentials: 'same-origin' });
+  const j = await r.json();
+  API_TOKEN = j.access;
+  localStorage.setItem('pharmacole_api_token', API_TOKEN);
+  return API_TOKEN;
+}
+
+async function loadActions() {
+  const t = await ensureToken();
+  const r = await fetch(`${API_BASE}/audit/actions`, {
+    headers: { Authorization: `Bearer ${t}` }
+  });
+  const j = await r.json();
+  const sel = document.getElementById('auditAction');
+  (j.actions || []).forEach(a => {
+    const o = document.createElement('option'); o.value = a; o.textContent = a;
+    sel.appendChild(o);
+  });
+}
+
+async function loadList() {
+  const t = await ensureToken();
+  const q = new URLSearchParams();
+  const search = document.getElementById('auditSearch').value.trim();
+  const action = document.getElementById('auditAction').value;
+  const from = document.getElementById('auditFrom').value;
+  const to = document.getElementById('auditTo').value;
+  if (search) q.set('q', search);
+  if (action) q.set('action', action);
+  if (from) q.set('from', from);
+  if (to) q.set('to', to);
+
+  const r = await fetch(`${API_BASE}/audit?${q}`, {
+    headers: { Authorization: `Bearer ${t}` }
+  });
+  const j = await r.json();
+  const el = document.getElementById('auditList');
+  if (!j.items || !j.items.length) {
+    el.innerHTML = '<p class="text-sm text-gray-400 text-center py-10">No audit entries match.</p>';
+    return;
+  }
+  el.innerHTML = j.items.map(it => `
+    <div class="bg-white rounded-xl border border-gray-100 p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">${it.action}</span>
+            ${it.target ? `<span class="text-xs text-gray-500 font-mono">${it.target}</span>` : ''}
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="fas fa-user"></i> ${it.actor_role || '—'} · <span class="font-mono">${(it.actor_id||'—').slice(0,8)}</span>
+            · <i class="fas fa-network-wired"></i> ${it.ip || '—'}
+          </p>
+          <p class="text-[11px] text-gray-400 mt-1">
+            <i class="fas fa-fingerprint"></i> ${(it.device_fingerprint||'').slice(0,16)} ·
+            ${new Date(it.created_at).toLocaleString()}
+          </p>
+          ${Object.keys(it.meta||{}).length ? `<pre class="mt-2 text-[11px] bg-gray-50 rounded p-2 overflow-x-auto">${JSON.stringify(it.meta,null,2)}</pre>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('auditApply').addEventListener('click', loadList);
+document.getElementById('auditSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadList(); });
+loadActions().then(loadList);
+</script>
+{% endblock %}

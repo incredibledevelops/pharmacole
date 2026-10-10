@@ -209,3 +209,30 @@ def register_jinja(app):
         now=lambda: datetime.utcnow(),
         now_utc=datetime.utcnow,
     )
+
+
+# ---------------------------------------------------------------------------
+# NEW — device / audit helpers
+# ---------------------------------------------------------------------------
+
+def client_ip(request):
+    """Best-effort client IP behind nginx / cloudflare."""
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def device_fingerprint(request):
+    """Light-weight fingerprint for audit logs — no persistence needed."""
+    import hashlib
+    parts = [
+        request.headers.get("User-Agent", ""),
+        request.headers.get("Accept-Language", ""),
+        request.headers.get("X-Device-Id", ""),   # electron/pwa can send this
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
+
+
+def is_api_request(request):
+    return request.path.startswith("/api/")

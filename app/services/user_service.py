@@ -3,15 +3,21 @@ from pymongo.errors import DuplicateKeyError
 from extensions import mongo
 from models import User
 from utils import oid
+from app.services import entitlement_service
 
 
 def create_user(email, password, full_name, role, tenant_id,
-                phone=None, is_active=True):
+                phone=None, is_active=True, enforce_tier=True):
     email = (email or "").lower().strip()
     if not email:
         raise ValueError("Email is required")
     if role not in ("owner", "pharmacist", "cashier", "super_admin"):
         raise ValueError("Invalid role")
+
+    if enforce_tier and role != "super_admin" and tenant_id:
+        ok, msg = entitlement_service.can_add_user(tenant_id, role=role)
+        if not ok:
+            raise ValueError(msg)
 
     doc = {
         "email": email,
@@ -50,9 +56,7 @@ def list_for_tenant(tenant_id):
     _id = oid(tenant_id)
     if not _id:
         return []
-    cur = mongo.db.users.find(
-        {"tenant_id": _id}
-    ).sort("created_at", 1)
+    cur = mongo.db.users.find({"tenant_id": _id}).sort("created_at", 1)
     return [User(d) for d in cur]
 
 
@@ -72,12 +76,18 @@ def toggle_active(user_id):
     if not user:
         return False
     new_state = not bool(user.get("is_active", True))
+
+    if new_state and user.get("role") != "super_admin":
+        tid = user.get("tenant_id")
+        ok, msg = entitlement_service.can_add_user(tid, role=user.get("role"))
+        if not ok:
+            raise ValueError(msg)
+
     mongo.db.users.update_one({"_id": _id}, {"$set": {"is_active": new_state}})
     return new_state
 
 
 def bump_session_version(user_id):
-    """Invalidate all existing sessions for the user."""
     _id = oid(user_id)
     if not _id:
         return

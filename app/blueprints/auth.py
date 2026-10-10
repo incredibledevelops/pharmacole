@@ -8,14 +8,10 @@ from flask_login import login_user, logout_user, login_required, current_user
 from extensions import mongo, limiter
 from models import find_user_by_email, find_tenant_by_code, find_tenant_by_id
 from utils import oid
-from app.services import tenant_service, user_service
+from app.services import tenant_service, user_service, branch_service
 
 auth_bp = Blueprint("auth", __name__)
 
-
-# ---------------------------------------------------------------------------
-# Landing / login
-# ---------------------------------------------------------------------------
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
@@ -72,8 +68,6 @@ def login():
         session.permanent = True
         login_user(user, remember=False)
 
-        # If tenant is expired, subscription_required will catch them, but we can
-        # proactively route to the lock screen for owners/pharmacists/cashiers.
         if user.role != "super_admin":
             tenant = find_tenant_by_id(user.tenant_id)
             if tenant and tenant.subscription_status != "active":
@@ -102,18 +96,21 @@ def _redirect_for_role(role):
     return redirect(url_for(mapping.get(role, "main.landing")))
 
 
-# ---------------------------------------------------------------------------
-# Signup
-# ---------------------------------------------------------------------------
-
 @auth_bp.route("/signup", methods=["GET", "POST"])
 @limiter.limit("5 per hour", methods=["POST"])
 def signup():
     if current_user.is_authenticated:
         return _redirect_for_role(current_user.role)
 
+    tiers = current_app.config["PRICING_TIERS"]
+    tier_order = current_app.config["TIER_ORDER"]
+
     if request.method == "POST":
         form = request.form
+
+        tier = (form.get("tier") or "pro").strip().lower()
+        if tier not in tiers:
+            tier = "pro"
 
         pharmacy_name = (form.get("pharmacy_name") or "").strip()
         owner_name = (form.get("owner_name") or "").strip()
@@ -138,17 +135,25 @@ def signup():
         if errors:
             for e in errors:
                 flash(e, "danger")
-            return render_template("auth/signup.html", form=form), 400
+            return render_template(
+                "auth/signup.html", form=form,
+                tiers=tiers, tier_order=tier_order, selected_tier=tier,
+            ), 400
 
         if tenant_service.get_by_owner_email(email):
             flash("That email is already registered.", "danger")
-            return render_template("auth/signup.html", form=form), 409
+            return render_template(
+                "auth/signup.html", form=form,
+                tiers=tiers, tier_order=tier_order, selected_tier=tier,
+            ), 409
 
         if user_service.get_by_email(email):
             flash("That email is already registered.", "danger")
-            return render_template("auth/signup.html", form=form), 409
+            return render_template(
+                "auth/signup.html", form=form,
+                tiers=tiers, tier_order=tier_order, selected_tier=tier,
+            ), 409
 
-        # Create tenant + owner
         try:
             tenant_id = tenant_service.create_tenant(
                 pharmacy_name=pharmacy_name,
@@ -156,40 +161,52 @@ def signup():
                 owner_email=email,
                 owner_phone=phone,
                 address=address,
+                tier=tier,
             )
-        except Exception as e:
+        except Exception:
             current_app.logger.exception("Tenant creation failed")
             flash("Could not create your pharmacy. Please try again.", "danger")
-            return render_template("auth/signup.html", form=form), 500
+            return render_template(
+                "auth/signup.html", form=form,
+                tiers=tiers, tier_order=tier_order, selected_tier=tier,
+            ), 500
 
         try:
             user_service.create_user(
-                email=email,
-                password=password,
-                full_name=owner_name,
-                role="owner",
-                tenant_id=tenant_id,
-                phone=phone,
+                email=email, password=password, full_name=owner_name,
+                role="owner", tenant_id=tenant_id, phone=phone,
             )
         except ValueError as e:
-            # Roll back tenant
             mongo.db.tenants.delete_one({"_id": tenant_id})
             flash(str(e), "danger")
-            return render_template("auth/signup.html", form=form), 400
+            return render_template(
+                "auth/signup.html", form=form,
+                tiers=tiers, tier_order=tier_order, selected_tier=tier,
+            ), 400
 
-        # Log in and send them to payment
+        try:
+            branch_service.ensure_default(tenant_id)
+        except Exception:
+            current_app.logger.warning("Could not create default branch", exc_info=True)
+
         user = find_user_by_email(email)
         session.permanent = True
         login_user(user, remember=False)
-        flash("Account created. Complete payment to activate your workspace.", "success")
+        flash(
+            f"Account created on the {tiers[tier]['label']} plan. "
+            "Complete payment to activate your workspace.",
+            "success",
+        )
         return redirect(url_for("auth.payment"))
 
-    return render_template("auth/signup.html", form={})
+    selected_tier = (request.args.get("tier") or "pro").strip().lower()
+    if selected_tier not in tiers:
+        selected_tier = "pro"
+    return render_template(
+        "auth/signup.html", form={},
+        tiers=tiers, tier_order=tier_order, selected_tier=selected_tier,
+    )
 
-
-# ---------------------------------------------------------------------------
-# Payment page (owner only)
-# ---------------------------------------------------------------------------
 
 @auth_bp.route("/payment", methods=["GET"])
 @login_required
@@ -202,10 +219,33 @@ def payment():
         flash("Pharmacy record not found.", "danger")
         return redirect(url_for("auth.logout"))
 
-    amount = tenant.subscription_amount
+    tiers = current_app.config["PRICING_TIERS"]
+    tier_order = current_app.config["TIER_ORDER"]
+    current_tier = tenant.tier if tenant.tier in tiers else "pro"
+    pending_tier = tenant.pending_tier if tenant.pending_tier in tiers else None
+
+    # Priority: query param > pending tier > current tier
+    qs_tier = (request.args.get("tier") or "").strip().lower()
+    if qs_tier in tiers:
+        selected_tier = qs_tier
+    elif pending_tier:
+        selected_tier = pending_tier
+    else:
+        selected_tier = current_tier
+
+    tier_info = tiers[selected_tier]
+    amount = float(tier_info["amount"])
+    is_tier_change = selected_tier != current_tier
+
     return render_template(
         "auth/payment.html",
         tenant=tenant,
         amount=amount,
+        current_tier=current_tier,
+        selected_tier=selected_tier,
+        tier_info=tier_info,
+        tiers=tiers,
+        tier_order=tier_order,
+        is_tier_change=is_tier_change,
         paystack_public_key=current_app.config["PAYSTACK_PUBLIC_KEY"],
     )

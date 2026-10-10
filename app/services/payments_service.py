@@ -20,6 +20,10 @@ def _headers():
     }
 
 
+# ---------------------------------------------------------------------------
+# Paystack API
+# ---------------------------------------------------------------------------
+
 def initialize_transaction(email, amount_ghs, reference, metadata=None):
     """Create a Paystack transaction. Returns the Paystack response data."""
     url = f"{current_app.config['PAYSTACK_BASE_URL']}/transaction/initialize"
@@ -66,7 +70,15 @@ def verify_transaction(reference):
     return data.get("data") or {}
 
 
-def record_payment_intent(tenant_id, amount, reference, status="pending"):
+# ---------------------------------------------------------------------------
+# Payment record helpers
+# ---------------------------------------------------------------------------
+
+def record_payment_intent(tenant_id, amount, reference, status="pending", tier=None):
+    """
+    Record a payment attempt. `tier` is the tier being charged (used later
+    to detect upgrades vs renewals on successful verification).
+    """
     tid = oid(tenant_id)
     if not tid:
         raise ValueError("Invalid tenant")
@@ -77,6 +89,7 @@ def record_payment_intent(tenant_id, amount, reference, status="pending"):
         "currency": current_app.config["SUBSCRIPTION_CURRENCY"],
         "paystack_reference": reference,
         "status": status,
+        "tier": tier,
         "created_at": datetime.utcnow(),
         "paid_at": None,
         "paystack_data": None,
@@ -139,6 +152,10 @@ def list_all(skip=0, limit=100):
 def recent(limit=10):
     return list(mongo.db.payments.find({}).sort("created_at", -1).limit(limit))
 
+
+# ---------------------------------------------------------------------------
+# Sanitizer
+# ---------------------------------------------------------------------------
 
 def _sanitize(data):
     """Strip anything that isn't JSON-serializable or is sensitive."""

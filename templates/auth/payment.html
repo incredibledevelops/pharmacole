@@ -9,15 +9,13 @@
 
 <div class="min-h-screen relative flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-teal-50 via-white to-gray-50 overflow-hidden">
 
-  <!-- Decorative blobs -->
   <div class="pointer-events-none absolute -top-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
   <div class="pointer-events-none absolute -bottom-32 -right-32 w-96 h-96 bg-primaryLight/10 rounded-full blur-3xl"></div>
 
-  <div class="relative w-full max-w-lg animate-fade-up">
+  <div class="relative w-full max-w-3xl animate-fade-up">
 
     <div class="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-gray-100">
 
-      <!-- Progress -->
       <div class="flex items-center justify-center gap-2 mb-6" aria-label="Signup progress">
         <div class="flex items-center gap-2 opacity-50">
           <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold flex items-center justify-center">
@@ -37,7 +35,6 @@
         </div>
       </div>
 
-      <!-- Header -->
       <div class="text-center mb-6">
         <div class="relative w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
           <i class="fas fa-credit-card text-primary text-2xl"></i>
@@ -45,7 +42,9 @@
             <i class="fas fa-lock"></i>
           </span>
         </div>
-        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Activate your pharmacy</h1>
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">
+          {% if is_tier_change %}Switch to {{ tier_info.label }}{% else %}Activate your pharmacy{% endif %}
+        </h1>
         <div class="text-sm text-gray-500 mt-1 inline-flex items-center gap-1.5 px-2 justify-center flex-wrap">
           <span class="truncate max-w-[200px]">{{ tenant.pharmacy_name }}</span>
           <span class="text-gray-300">·</span>
@@ -61,11 +60,66 @@
         </div>
       </div>
 
-      <!-- Summary card -->
+      {% if is_tier_change %}
+      <div class="mb-6 rounded-2xl p-4 flex items-start gap-3 bg-blue-50 border border-blue-200">
+        <span class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-arrow-up-right-dots"></i>
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-gray-800">
+            Plan change: {{ tiers[current_tier].label }} → {{ tier_info.label }}
+          </p>
+          <p class="text-xs text-gray-600 mt-0.5">
+            Your current plan stays active until this payment succeeds. If you cancel, nothing changes.
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="mb-6">
+        <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 text-center">
+          Choose your plan
+        </p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2" role="radiogroup" aria-label="Plan">
+          {% for key in tier_order %}
+            {% set t = tiers[key] %}
+            <button type="button"
+              class="tier-card text-left rounded-2xl border p-3 transition
+                {% if key == selected_tier %}
+                  border-primary ring-2 ring-primary/20 bg-primary/5
+                {% else %}
+                  border-gray-200 hover:border-primary/50 bg-white
+                {% endif %}"
+              data-tier="{{ key }}"
+              data-amount="{{ t.amount }}"
+              role="radio"
+              aria-checked="{{ 'true' if key == selected_tier else 'false' }}">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-gray-800">{{ t.label }}</span>
+                {% if key == selected_tier %}
+                  <i class="fas fa-check-circle text-primary text-xs"></i>
+                {% else %}
+                  <span class="w-3 h-3 rounded-full border border-gray-300 inline-block"></span>
+                {% endif %}
+              </div>
+              <p class="text-lg font-extrabold text-gray-800 leading-none">
+                GH₵ {{ '%.0f'|format(t.amount) }}
+                <span class="text-[10px] font-normal text-gray-400">/mo</span>
+              </p>
+              <p class="text-[10px] text-gray-500 mt-1 leading-tight">
+                {% if t.branches == -1 %}∞ branches{% else %}{{ t.branches }} br.{% endif %}
+                ·
+                {% if t.users == -1 %}∞ users{% else %}{{ t.users }} users{% endif %}
+              </p>
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+
       <div class="bg-gradient-to-br from-gray-50 to-teal-50/40 rounded-2xl p-5 mb-5 border border-gray-100">
         <div class="flex justify-between text-sm mb-2.5">
           <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-crown text-accent text-xs"></i> Plan</span>
-          <span class="font-semibold text-gray-800">Pharmacy Pro · Monthly</span>
+          <span id="summaryPlan" class="font-semibold text-gray-800">{{ tier_info.label }} · Monthly</span>
         </div>
         <div class="flex justify-between text-sm mb-2.5">
           <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-calendar-day text-primary text-xs"></i> Duration</span>
@@ -80,11 +134,10 @@
           <span class="text-gray-600 font-semibold inline-flex items-center gap-1.5">
             <i class="fas fa-receipt text-primary text-sm"></i> Total due
           </span>
-          <span class="text-3xl font-extrabold text-primary tracking-tight">GH₵ {{ "%.2f"|format(amount) }}</span>
+          <span id="summaryTotal" class="text-3xl font-extrabold text-primary tracking-tight">GH₵ {{ "%.2f"|format(amount) }}</span>
         </div>
       </div>
 
-      <!-- Payment methods row -->
       <div class="mb-5">
         <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 text-center">
           Payment methods accepted
@@ -105,7 +158,6 @@
         </div>
       </div>
 
-      <!-- Pay button -->
       <button id="payBtn" type="button" aria-busy="false"
         class="btn-primary w-full bg-primary hover:bg-primaryLight disabled:opacity-60 disabled:cursor-not-allowed
                text-white font-bold py-4 rounded-xl shadow-md
@@ -114,7 +166,6 @@
         <span id="payBtnLabel">Pay GH₵ {{ "%.2f"|format(amount) }} with Paystack</span>
       </button>
 
-      <!-- Session indicator -->
       <p class="text-[10px] text-gray-400 text-center mt-3 inline-flex w-full items-center justify-center gap-1.5">
         <span class="relative flex h-1.5 w-1.5">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -123,13 +174,11 @@
         Secure HTTPS session · Token valid for 15 minutes
       </p>
 
-      <!-- Timer indicator -->
       <div id="payTimer" class="hidden mt-3 text-[11px] text-gray-500 text-center inline-flex w-full items-center justify-center gap-1.5">
         <i class="fas fa-clock text-primary"></i>
         <span>Waiting for payment… <span id="payTimerSeconds" class="font-mono font-semibold text-gray-700">0s</span></span>
       </div>
 
-      <!-- Error alert -->
       <div id="payError" role="alert" aria-live="polite"
         class="hidden mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3 items-start gap-2">
         <i class="fas fa-exclamation-circle mt-0.5"></i>
@@ -144,14 +193,12 @@
         </button>
       </div>
 
-      <!-- Trust row -->
       <div class="flex items-center justify-center gap-4 mt-5 text-[11px] text-gray-400 flex-wrap">
         <span class="inline-flex items-center gap-1"><i class="fas fa-shield-alt text-emerald-500"></i> Paystack secured</span>
         <span class="inline-flex items-center gap-1"><i class="fas fa-ban text-primary"></i> No auto-charge</span>
         <span class="inline-flex items-center gap-1"><i class="fas fa-headset text-primary"></i> Support</span>
       </div>
 
-      <!-- Expandable "Why is this safe?" -->
       <details class="mt-4 group">
         <summary class="cursor-pointer text-xs text-primary font-semibold inline-flex items-center gap-1 list-none select-none">
           <i class="fas fa-chevron-down group-open:rotate-180 transition text-[10px]"></i>
@@ -161,6 +208,9 @@
           <p><strong>Paystack</strong> processes the payment — Pharmacole never sees your card details.</p>
           <p><strong>No auto-renewal.</strong> You pay once for 30 days. We never charge you again unless you initiate a new payment.</p>
           <p><strong>Data is always yours.</strong> If the subscription lapses, your workspace locks but your data stays intact.</p>
+          {% if is_tier_change %}
+          <p><strong>Your current plan is unchanged</strong> until this payment succeeds. If you close this page, nothing changes.</p>
+          {% endif %}
         </div>
       </details>
 
@@ -168,7 +218,6 @@
         By paying, you agree to Pharmacole's subscription terms. You renew manually each month.
       </p>
 
-      <!-- Back link -->
       <div class="text-center mt-5">
         <a href="{{ url_for('main.redirect_dashboard') }}"
           class="text-xs text-gray-500 hover:text-primary transition inline-flex items-center gap-1">
@@ -177,14 +226,12 @@
       </div>
     </div>
 
-    <!-- Help footer -->
     <p class="text-center text-xs text-gray-400 mt-5">
       Trouble paying? <a href="mailto:support@pharmacole.com" class="text-primary font-medium hover:underline">Contact support</a>
     </p>
   </div>
 </div>
 
-<!-- Paystack inline -->
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 <script>
@@ -196,6 +243,7 @@
     email: "{{ current_user.email }}",
     tenantCode: "{{ tenant.tenant_code }}",
     amount: {{ amount|float }},
+    tier: "{{ selected_tier }}",
     csrfToken: "{{ csrf_token() }}"
   };
 </script>
@@ -210,18 +258,55 @@
     var timerBox = document.getElementById('payTimer');
     var timerSeconds = document.getElementById('payTimerSeconds');
     var copyBtn = document.getElementById('copyTenantBtn');
+    var summaryPlan = document.getElementById('summaryPlan');
+    var summaryTotal = document.getElementById('summaryTotal');
 
     var timerInterval = null;
     var timerStart = 0;
 
-    /* ---------- Error helper ---------- */
+    document.querySelectorAll('.tier-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var tier = card.dataset.tier;
+        var amount = parseFloat(card.dataset.amount) || 0;
+
+        document.querySelectorAll('.tier-card').forEach(function (c) {
+          c.classList.remove('border-primary', 'ring-2', 'ring-primary/20', 'bg-primary/5');
+          c.classList.add('border-gray-200', 'bg-white');
+          c.setAttribute('aria-checked', 'false');
+          var icon = c.querySelector('.fas.fa-check-circle');
+          if (icon) {
+            var slot = document.createElement('span');
+            slot.className = 'w-3 h-3 rounded-full border border-gray-300 inline-block';
+            icon.replaceWith(slot);
+          }
+        });
+
+        card.classList.remove('border-gray-200', 'bg-white');
+        card.classList.add('border-primary', 'ring-2', 'ring-primary/20', 'bg-primary/5');
+        card.setAttribute('aria-checked', 'true');
+        var slot = card.querySelector('span.w-3.h-3');
+        if (slot) {
+          var check = document.createElement('i');
+          check.className = 'fas fa-check-circle text-primary text-xs';
+          slot.replaceWith(check);
+        }
+
+        cfg.tier = tier;
+        cfg.amount = amount;
+
+        var planName = card.querySelector('.text-xs.font-bold');
+        if (summaryPlan && planName) summaryPlan.textContent = planName.textContent + ' · Monthly';
+        if (summaryTotal) summaryTotal.textContent = 'GH₵ ' + amount.toFixed(2);
+        if (label) label.innerHTML = 'Pay GH₵ ' + amount.toFixed(2) + ' with Paystack';
+      });
+    });
+
     function showError(msg, hint) {
       if (!errBox || !errMsg) return;
       errMsg.textContent = msg;
       if (errHint) errHint.textContent = hint || '';
       errBox.classList.remove('hidden');
       errBox.classList.add('flex');
-      // Bring attention
       errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     function hideError() {
@@ -230,7 +315,6 @@
       errBox.classList.remove('flex');
     }
 
-    /* ---------- Loading + timer ---------- */
     function setLoading(on, text) {
       if (!btn) return;
       btn.disabled = !!on;
@@ -243,7 +327,6 @@
       if (on) startTimer();
       else stopTimer();
     }
-
     function startTimer() {
       if (!timerBox || !timerSeconds) return;
       timerStart = Date.now();
@@ -254,33 +337,14 @@
       timerInterval = setInterval(function () {
         var secs = Math.floor((Date.now() - timerStart) / 1000);
         timerSeconds.textContent = secs + 's';
-        if (secs === 60) {
-          // Gentle nudge after 1 min
-          showError(
-            'Still waiting for Paystack?',
-            'If the popup was blocked or you closed it, try again. If nothing happened, refresh the page.'
-          );
-        }
+        if (secs === 60) showError('Still waiting for Paystack?', 'If the popup was blocked, try again.');
       }, 1000);
     }
-
     function stopTimer() {
       clearInterval(timerInterval);
-      if (timerBox) {
-        timerBox.classList.add('hidden');
-        timerBox.classList.remove('inline-flex');
-      }
+      if (timerBox) { timerBox.classList.add('hidden'); timerBox.classList.remove('inline-flex'); }
     }
 
-    /* ---------- Expose helpers for payment.js ---------- */
-    window.__pay = {
-      showError: showError,
-      hideError: hideError,
-      setLoading: setLoading,
-      stopTimer: stopTimer
-    };
-
-    /* ---------- Copy tenant code ---------- */
     if (copyBtn) {
       copyBtn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -288,44 +352,70 @@
         if (!text) return;
         function done() {
           var icon = copyBtn.querySelector('i');
-          if (icon) {
-            icon.className = 'fas fa-check text-[10px] text-emerald-500';
-            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400);
-          }
+          if (icon) { icon.className = 'fas fa-check text-[10px] text-emerald-500';
+            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400); }
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done).catch(function () {
-            fallbackCopy(text); done();
-          });
-        } else {
-          fallbackCopy(text); done();
-        }
+          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+        } else { fallbackCopy(text); done(); }
       });
     }
-
     function fallbackCopy(text) {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
+      var ta = document.createElement('textarea'); ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
       try { document.execCommand('copy'); } catch (err) {}
       document.body.removeChild(ta);
     }
 
-    /* ---------- Keyboard: Enter pays ---------- */
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && btn && !btn.disabled && document.activeElement !== document.body) return;
-      if (e.key === 'Enter' && btn && !btn.disabled) {
-        e.preventDefault();
-        btn.click();
-      }
-    });
-
-    /* ---------- Auto-init if payment.js defines initPaymentPage ---------- */
     if (typeof window.initPaymentPage === 'function') {
       window.initPaymentPage(cfg);
+    } else {
+      btn.addEventListener('click', function () {
+        hideError(); setLoading(true, 'Initializing...');
+        fetch(cfg.initUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': cfg.csrfToken,
+          },
+          body: JSON.stringify({ tier: cfg.tier }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) throw new Error(data.error);
+          if (!data.access_code) throw new Error('No access code from server.');
+          setLoading(false);
+          var handler = PaystackPop.setup({
+            key: cfg.publicKey,
+            email: cfg.email,
+            amount: Math.round((data.amount || cfg.amount) * 100),
+            currency: 'GHS',
+            ref: data.reference,
+            callback: function (response) {
+              setLoading(true, 'Verifying payment...');
+              fetch(cfg.verifyUrl + '?reference=' + encodeURIComponent(response.reference), {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken }
+              })
+              .then(function (r) { return r.json(); })
+              .then(function (v) {
+                if (v.ok) window.location.href = cfg.dashUrl;
+                else { showError(v.error || 'Verification failed.'); setLoading(false); }
+              })
+              .catch(function () { showError('Could not verify.'); setLoading(false); });
+            },
+            onClose: function () { setLoading(false); }
+          });
+          handler.openIframe();
+        })
+        .catch(function (err) {
+          showError(err.message || 'Could not initialize payment.');
+          setLoading(false);
+        });
+      });
     }
   })();
 </script>

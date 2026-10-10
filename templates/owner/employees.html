@@ -10,15 +10,26 @@
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold text-gray-800 truncate">Employees</h1>
       <p class="text-xs text-gray-400 truncate hidden sm:block">
-        Manage your pharmacy team · <span id="hdrCount" aria-live="polite">{{ employees|length }}</span> total
+        {{ user_count }} of {% if user_limit == -1 %}unlimited{% else %}{{ user_limit }}{% endif %} users · {{ tier_label }} plan
       </p>
     </div>
   </div>
-  <button onclick="openModal()" class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0 active:scale-95">
-    <i class="fas fa-user-plus"></i>
-    <span class="hidden sm:inline">Add employee</span>
-    <span class="sm:hidden">Add</span>
-  </button>
+
+  {% if can_add_user %}
+    <button onclick="openModal()" class="bg-primary hover:bg-primaryLight text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0 active:scale-95">
+      <i class="fas fa-user-plus"></i>
+      <span class="hidden sm:inline">Add employee</span>
+      <span class="sm:hidden">Add</span>
+    </button>
+  {% else %}
+    <a href="{{ url_for('owner.subscription') }}"
+       class="bg-amber-500 hover:bg-amber-400 text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 flex-shrink-0"
+       title="User limit reached on your {{ tier_label }} plan">
+      <i class="fas fa-arrow-up"></i>
+      <span class="hidden sm:inline">Upgrade to add more</span>
+      <span class="sm:hidden">Upgrade</span>
+    </a>
+  {% endif %}
 </header>
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
@@ -27,7 +38,24 @@
   {% set active = employees|selectattr('is_active','equalto',True)|list %}
   {% set inactive = employees|rejectattr('is_active','equalto',True)|list %}
 
-  <!-- Stats -->
+  {% if not can_add_user %}
+  <div class="mb-5 rounded-2xl p-4 flex items-start gap-3 bg-amber-50 border border-amber-200">
+    <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+      <i class="fas fa-lock"></i>
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-semibold text-gray-800">You've reached the {{ tier_label }} user limit</p>
+      <p class="text-xs text-gray-600 mt-0.5">
+        Your plan allows {{ user_limit }} active users. Upgrade to add more team members.
+      </p>
+    </div>
+    <a href="{{ url_for('owner.subscription') }}"
+       class="flex-shrink-0 bg-primary hover:bg-primaryLight text-white text-xs font-bold px-4 py-2 rounded-lg">
+      Upgrade
+    </a>
+  </div>
+  {% endif %}
+
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 md:mb-6">
     <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
@@ -48,7 +76,9 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         </div>
         <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ active|length }}</p>
-        <p class="text-[11px] text-gray-400 mt-0.5">Can sign in</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">
+          {% if user_limit == -1 %}Unlimited{% else %}of {{ user_limit }} allowed{% endif %}
+        </p>
       </div>
     </div>
     <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
@@ -76,8 +106,6 @@
   </div>
 
   <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-
-    <!-- Toolbar -->
     <div class="px-4 md:px-5 py-4 border-b border-gray-100 flex flex-col gap-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h3 class="font-semibold text-gray-800 flex items-center gap-2">
@@ -100,7 +128,6 @@
         </div>
       </div>
 
-      <!-- Filter chips -->
       <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Employee filters">
         <button type="button" data-filter="all" class="emp-chip active bg-primary text-white text-xs font-semibold px-3.5 py-1.5 rounded-full whitespace-nowrap flex-shrink-0 shadow-sm transition-all">
           <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="ml-0.5 opacity-80">{{ employees|length }}</span>
@@ -120,7 +147,6 @@
       </div>
     </div>
 
-    <!-- Desktop table -->
     <div class="hidden md:block overflow-x-auto table-scroll">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
@@ -205,7 +231,6 @@
       </table>
     </div>
 
-    <!-- Mobile list -->
     <div class="md:hidden divide-y divide-gray-100">
       {% for e in employees %}
       <div class="emp-row p-4"
@@ -271,7 +296,6 @@
       {% endfor %}
     </div>
 
-    <!-- No results (search/filter) -->
     <div id="empNoResults" class="hidden py-14 px-4 text-center text-gray-400">
       <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
         <i class="fas fa-search text-2xl text-gray-300"></i>
@@ -282,10 +306,8 @@
   </div>
 </main>
 
-<!-- Add employee modal -->
 <div id="addModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-[60] items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
   <div class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-fade-up">
-
     <div class="px-5 sm:px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
@@ -383,7 +405,6 @@
   </div>
 </div>
 
-<!-- Toast -->
 <div id="toast" role="status" aria-live="polite"
   class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] opacity-0 translate-y-3 transition-all duration-300">
   <div class="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
@@ -396,7 +417,6 @@
 
 {% block scripts %}
 <script>
-  /* ---------- Password helpers ---------- */
   function togglePwd(id, btn) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -421,7 +441,6 @@
         hint.innerHTML = '<i class="fas fa-check-circle text-emerald-500"></i> Suggested password ready — copy or edit as needed.';
         hint.className = 'text-[11px] text-emerald-600 mt-1 flex items-center gap-1';
       }
-      // Flip eye icon back if it was showing
       var btns = document.querySelectorAll('[aria-label="Show password"]');
       btns.forEach(function (b) {
         var i = b.querySelector('i');
@@ -430,7 +449,6 @@
     }
   }
 
-  /* ---------- Modal ---------- */
   function openModal() {
     var m = document.getElementById('addModal');
     m.classList.remove('hidden'); m.classList.add('flex');
@@ -449,7 +467,6 @@
   }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-  /* ---------- Submit loading state ---------- */
   (function () {
     var form = document.getElementById('addEmpForm');
     var btn = document.getElementById('addEmpBtn');
@@ -462,13 +479,11 @@
     }
   })();
 
-  /* ---------- Search + filter ---------- */
   (function () {
     var search = document.getElementById('empSearch');
     var searchClear = document.getElementById('empSearchClear');
     var noResults = document.getElementById('empNoResults');
     var listCount = document.getElementById('listCount');
-    var hdrCount = document.getElementById('hdrCount');
     var activeFilter = 'all';
 
     function apply() {
@@ -487,7 +502,6 @@
       });
       if (noResults) noResults.classList.toggle('hidden', visible > 0);
       if (listCount) listCount.textContent = visible;
-      if (hdrCount) hdrCount.textContent = visible;
       if (searchClear) searchClear.classList.toggle('hidden', !q);
     }
 
@@ -512,7 +526,6 @@
     });
   })();
 
-  /* ---------- Copy email + toast ---------- */
   (function () {
     var toast = document.getElementById('toast');
     var toastMsg = document.getElementById('toastMsg');

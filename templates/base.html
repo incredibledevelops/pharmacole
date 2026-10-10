@@ -15,6 +15,21 @@
   <meta property="og:url" content="{{ request.url }}">
   <meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
 
+  <!-- PWA: register service worker + push -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
+  <script>
+    (function () {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/pwa/service-worker.js', { scope: '/' })
+          .catch((err) => console.warn('SW registration failed', err));
+        });
+      }
+    })();
+  </script>
+
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{% block tw_title %}Pharmacole · Multi-tenant Pharmacy SaaS{% endblock %}">
   <meta name="twitter:description" content="{% block tw_description %}POS, inventory, expiry tracking, and monthly billing via Paystack.{% endblock %}">

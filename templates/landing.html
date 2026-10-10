@@ -54,7 +54,6 @@
 
 <!-- HERO -->
 <section class="relative overflow-hidden bg-gradient-to-br from-teal-50 via-white to-gray-50">
-  <!-- Decorative blobs -->
   <div class="absolute -top-24 -left-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
   <div class="absolute top-1/3 -right-24 w-80 h-80 bg-primaryLight/10 rounded-full blur-3xl pointer-events-none"></div>
   <div class="absolute bottom-0 left-1/4 w-64 h-64 bg-accent/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -76,7 +75,7 @@
 
       <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-xl mx-auto md:mx-0 leading-relaxed">
         POS, inventory, expiry tracking, employee management, and real-time analytics.
-        Built for Ghana pharmacies. <strong class="text-gray-800">GH₵ 500/month.</strong>
+        Built for Ghana pharmacies. <strong class="text-gray-800">From GH₵ 300/month.</strong>
       </p>
 
       <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center md:justify-start">
@@ -213,7 +212,6 @@
     </div>
 
     <div class="grid md:grid-cols-3 gap-6 relative">
-      <!-- connector line -->
       <div class="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-primary/10 via-primary/40 to-primary/10"></div>
 
       {% set steps = [
@@ -237,54 +235,88 @@
 
 <!-- PRICING -->
 <section id="pricing" class="py-16 sm:py-20 bg-white scroll-mt-20">
-  <div class="max-w-3xl mx-auto px-4 text-center">
-    <div class="reveal">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-12 reveal">
       <span class="text-primary font-semibold text-sm uppercase tracking-wider">Pricing</span>
-      <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-3 mt-2">One simple plan</h2>
-      <p class="text-gray-500 mb-10">Everything included. Powered by Paystack.</p>
+      <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-3 mt-2">Pick the plan that fits</h2>
+      <p class="text-gray-500 max-w-2xl mx-auto">All plans include POS, inventory, expiry alerts, and manual monthly renewal — no auto-charge.</p>
     </div>
 
-    <div class="reveal relative">
-      <div class="absolute inset-0 bg-gradient-to-tr from-primary/20 to-primaryLight/20 rounded-3xl blur-2xl transform rotate-1"></div>
-      <div class="relative bg-white rounded-3xl shadow-2xl border border-gray-100 p-8 max-w-md mx-auto">
-        <span class="inline-flex items-center gap-1.5 bg-gradient-to-r from-primary/10 to-primaryLight/10 text-primary text-xs font-semibold px-3 py-1.5 rounded-full mb-4 ring-1 ring-primary/20">
-          <i class="fas fa-crown text-accent"></i> Pharmacy Pro
-        </span>
-        <p class="text-5xl font-extrabold text-gray-800 mb-1">
-          GH₵ 500<span class="text-lg font-normal text-gray-400">/month</span>
-        </p>
-        <p class="text-gray-500 text-sm mb-6">Unlimited cashiers · 5 pharmacists · all features</p>
+    {% set tiers = config['PRICING_TIERS'] %}
+    {% set order = config['TIER_ORDER'] %}
 
-        <ul class="text-left space-y-3 mb-8 text-sm text-gray-600">
-          {% for line in [
-            'POS, inventory & expiry tracking',
-            'Employee & supplier management',
-            'Sales reports & CSV export',
-            'Manual monthly renewal — no auto-charge'
-          ] %}
-          <li class="flex items-start gap-2">
-            <i class="fas fa-check-circle text-primary mt-0.5"></i>
-            <span>{{ line }}</span>
-          </li>
-          {% endfor %}
-        </ul>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      {% for key in order %}
+        {% set tier = tiers[key] %}
+        <div class="reveal relative rounded-3xl border bg-white p-6 flex flex-col
+          {% if tier.get('highlight') %}
+            border-primary shadow-2xl ring-2 ring-primary/20 lg:scale-[1.03]
+          {% else %}
+            border-gray-100 shadow-md
+          {% endif %}">
 
-        {% if current_user.is_authenticated %}
-          <a href="{{ url_for('main.redirect_dashboard') }}"
-             class="btn-primary block w-full bg-primary hover:bg-primaryLight text-white font-bold py-3.5 rounded-full shadow-md text-center">
-            Go to dashboard
-          </a>
-        {% else %}
-          <a href="{{ url_for('auth.signup') }}"
-             class="btn-primary block w-full bg-primary hover:bg-primaryLight text-white font-bold py-3.5 rounded-full shadow-md text-center mb-3">
-            Sign up & pay
-          </a>
-          <p class="text-xs text-gray-400 inline-flex items-center gap-1">
-            <i class="fas fa-lock"></i> Secure payment via Paystack
+          {% if tier.get('highlight') %}
+            <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-primary to-primaryLight text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow">
+              Most popular
+            </span>
+          {% endif %}
+
+          <div class="flex items-center gap-2 mb-1">
+            {% if key == 'starter' %}<i class="fas fa-seedling text-emerald-500"></i>{% endif %}
+            {% if key == 'pro' %}<i class="fas fa-crown text-amber-500"></i>{% endif %}
+            {% if key == 'business' %}<i class="fas fa-building text-blue-500"></i>{% endif %}
+            {% if key == 'enterprise' %}<i class="fas fa-rocket text-purple-500"></i>{% endif %}
+            <h3 class="font-bold text-gray-800 text-lg">{{ tier.label }}</h3>
+          </div>
+          <p class="text-xs text-gray-500 mb-4">{{ tier.tagline }}</p>
+
+          <p class="text-3xl font-extrabold text-gray-800 mb-1">
+            GH₵ {{ '%.0f'|format(tier.amount) }}<span class="text-sm font-normal text-gray-400">/mo</span>
           </p>
-        {% endif %}
-      </div>
+          <p class="text-xs text-gray-500 mb-5">
+            {% if tier.branches == -1 %}Unlimited branches{% else %}{{ tier.branches }} branch{% if tier.branches != 1 %}es{% endif %}{% endif %}
+            ·
+            {% if tier.users == -1 %}Unlimited users{% else %}{{ tier.users }} user{% if tier.users != 1 %}s{% endif %}{% endif %}
+          </p>
+
+          <ul class="text-sm text-gray-600 space-y-2 mb-6 flex-1">
+            {% for f in tier.features %}
+              <li class="flex items-start gap-2">
+                <i class="fas fa-check-circle text-primary mt-0.5 text-xs"></i>
+                <span>{{ f }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+
+          {% if current_user.is_authenticated %}
+            <a href="{{ url_for('main.redirect_dashboard') }}"
+               class="block w-full text-center font-bold py-3 rounded-xl transition
+               {% if tier.get('highlight') %}
+                 bg-primary hover:bg-primaryLight text-white shadow-md
+               {% else %}
+                 border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700
+               {% endif %}">
+              Go to dashboard
+            </a>
+          {% else %}
+            <a href="{{ url_for('auth.signup', tier=key) }}"
+               data-tier="{{ key }}"
+               class="choose-tier block w-full text-center font-bold py-3 rounded-xl transition
+               {% if tier.get('highlight') %}
+                 bg-primary hover:bg-primaryLight text-white shadow-md
+               {% else %}
+                 border border-gray-200 hover:border-primary hover:bg-primary/5 text-gray-700
+               {% endif %}">
+              Choose {{ tier.label }}
+            </a>
+          {% endif %}
+        </div>
+      {% endfor %}
     </div>
+
+    <p class="text-center text-xs text-gray-400 mt-6 inline-flex w-full items-center justify-center gap-2">
+      <i class="fas fa-lock text-primary"></i> Secure payment via Paystack · No auto-charge
+    </p>
   </div>
 </section>
 
@@ -301,7 +333,8 @@
         ('Is billing automatic?', 'No — Pharmacole never auto-charges. You renew manually from your dashboard when you choose, via Paystack.'),
         ('Can I manage multiple pharmacies?', 'Each pharmacy has its own tenant code and workspace. You can register as many as you need.'),
         ('What happens when my subscription expires?', 'Your workspace (owner, pharmacists, and cashiers) is locked until you renew. Your data is always safe.'),
-        ('Do you support mobile money?', 'Yes — Paystack supports card, mobile money, and bank payments.')
+        ('Do you support mobile money?', 'Yes — Paystack supports card, mobile money, and bank payments.'),
+        ('Can I switch plans later?', 'Yes — you can change plans from the payment page or your dashboard at any time.')
       ] %}
       {% for q, a in faqs %}
       <details class="reveal group bg-white rounded-2xl p-5 cursor-pointer border border-gray-100 hover:border-primary/30 transition-colors open:shadow-lg open:border-primary/30">

@@ -21,16 +21,12 @@ def _guard():
     return None
 
 
-# ---------------------------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------------------------
-
 @pharmacist_bp.route("/dashboard")
 def dashboard():
     tenant = find_tenant_by_id(current_user.tenant_id)
     total_skus = inventory_service.count_for_tenant(current_user.tenant_id)
     low_stock = inventory_service.low_stock(current_user.tenant_id, limit=20)
-    expiring = inventory_service.expiring_within(current_user.tenant_id, days=30, limit=20)
+    expiring = inventory_service.expiring_within(current_user.tenant_id, limit=20)
     pending_rx = prescription_service.count_pending(current_user.tenant_id)
 
     return render_template(
@@ -42,10 +38,6 @@ def dashboard():
         pending_rx=pending_rx,
     )
 
-
-# ---------------------------------------------------------------------------
-# Inventory
-# ---------------------------------------------------------------------------
 
 @pharmacist_bp.route("/inventory")
 def inventory():
@@ -86,9 +78,7 @@ def add_drug():
 
     suppliers = supplier_service.list_for_tenant(current_user.tenant_id)
     return render_template(
-        "pharmacist/add_drug.html",
-        tenant=tenant,
-        suppliers=suppliers,
+        "pharmacist/add_drug.html", tenant=tenant, suppliers=suppliers,
     )
 
 
@@ -110,10 +100,6 @@ def adjust_stock(item_id):
     return redirect(url_for("pharmacist.inventory"))
 
 
-# ---------------------------------------------------------------------------
-# Expiry tracker
-# ---------------------------------------------------------------------------
-
 @pharmacist_bp.route("/expiry")
 def expiry():
     tenant = find_tenant_by_id(current_user.tenant_id)
@@ -123,11 +109,9 @@ def expiry():
         "60": [],
         "90": [],
     }
-    # 31-60
     within_60 = inventory_service.expiring_within(current_user.tenant_id, days=60)
     seen_30 = {str(i["_id"]) for i in buckets["30"]}
     buckets["60"] = [i for i in within_60 if str(i["_id"]) not in seen_30]
-    # 61-90
     within_90 = inventory_service.expiring_within(current_user.tenant_id, days=90)
     seen_60 = seen_30 | {str(i["_id"]) for i in buckets["60"]}
     buckets["90"] = [i for i in within_90 if str(i["_id"]) not in seen_60]
@@ -135,20 +119,18 @@ def expiry():
     return render_template("pharmacist/expiry.html", tenant=tenant, buckets=buckets)
 
 
-# ---------------------------------------------------------------------------
-# Prescriptions
-# ---------------------------------------------------------------------------
-
 @pharmacist_bp.route("/prescriptions")
 def prescription():
     tenant = find_tenant_by_id(current_user.tenant_id)
     items = prescription_service.list_for_tenant(current_user.tenant_id, limit=200)
-    return render_template("pharmacist/prescription.html", tenant=tenant, prescriptions=items)
+    return render_template("pharmacist/prescription.html",
+                          tenant=tenant, prescriptions=items)
 
 
 @pharmacist_bp.route("/prescriptions/<rx_id>/status", methods=["POST"])
 def set_prescription_status(rx_id):
     status = (request.form.get("status") or "").strip()
     ok = prescription_service.set_status(current_user.tenant_id, rx_id, status)
-    flash("Prescription updated." if ok else "Could not update.", "success" if ok else "danger")
+    flash("Prescription updated." if ok else "Could not update.",
+          "success" if ok else "danger")
     return redirect(url_for("pharmacist.prescription"))

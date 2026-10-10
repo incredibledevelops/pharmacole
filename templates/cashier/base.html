@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0d6e6e">
   <title>{% block title %}Cashier · {{ t_name(tenant) }}{% endblock %}</title>
+  
+  <!-- PWA -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<script>
+(function () {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/pwa/service-worker.js', { scope: '/' })
+        .catch((err) => console.warn('SW registration failed', err));
+    });
+  }
+})();
+</script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {

@@ -5,12 +5,13 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from decorators import role_required, subscription_required
+from decorators import role_required, subscription_required, feature_required
 from models import find_tenant_by_id
-from utils import to_float, to_int, oid
+from utils import oid
 from app.services import (
     user_service, inventory_service, sales_service,
     supplier_service, payments_service, tenant_service,
+    branch_service, audit_service, entitlement_service,
 )
 
 owner_bp = Blueprint("owner", __name__, url_prefix="/owner")
@@ -21,22 +22,26 @@ owner_bp = Blueprint("owner", __name__, url_prefix="/owner")
 @role_required("owner")
 @subscription_required
 def _guard():
-    """Applies to every route in this blueprint."""
     return None
 
-
-# ---------------------------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------------------------
 
 @owner_bp.route("/dashboard")
 def dashboard():
     tenant = find_tenant_by_id(current_user.tenant_id)
     employees = user_service.list_for_tenant(current_user.tenant_id)
     low_stock = inventory_service.low_stock(current_user.tenant_id, limit=10)
-    expiring = inventory_service.expiring_within(current_user.tenant_id, days=30, limit=10)
+    expiring = inventory_service.expiring_within(current_user.tenant_id, limit=10)
     recent_sales = sales_service.recent_sales(current_user.tenant_id, limit=10)
     revenue_today = sales_service.revenue_today(current_user.tenant_id)
+
+    tier = entitlement_service.limits_for(current_user.tenant_id)
+    usage = {
+        "branches": entitlement_service.count_active_branches(current_user.tenant_id),
+        "users": entitlement_service.count_active_users(current_user.tenant_id),
+        "branch_limit": tier.get("branches", 1),
+        "user_limit": tier.get("users", -1),
+        "tier_label": tier.get("label", "Pro"),
+    }
 
     return render_template(
         "owner/dashboard.html",
@@ -46,18 +51,28 @@ def dashboard():
         expiring=expiring,
         recent_sales=recent_sales,
         total_sales_today=revenue_today,
+        tier_usage=usage,
     )
 
-
-# ---------------------------------------------------------------------------
-# Employees
-# ---------------------------------------------------------------------------
 
 @owner_bp.route("/employees")
 def employees():
     tenant = find_tenant_by_id(current_user.tenant_id)
     staff = user_service.list_for_tenant(current_user.tenant_id)
-    return render_template("owner/employees.html", tenant=tenant, employees=staff)
+    tier = entitlement_service.limits_for(current_user.tenant_id)
+    user_count = entitlement_service.count_active_users(current_user.tenant_id)
+    user_limit = tier.get("users", -1)
+    can_add = (user_limit == -1) or (user_count < user_limit)
+
+    return render_template(
+        "owner/employees.html",
+        tenant=tenant,
+        employees=staff,
+        user_count=user_count,
+        user_limit=user_limit,
+        can_add_user=can_add,
+        tier_label=tier.get("label", "Pro"),
+    )
 
 
 @owner_bp.route("/employees/add", methods=["POST"])
@@ -85,6 +100,7 @@ def add_employee():
             tenant_id=current_user.tenant_id,
             phone=phone,
         )
+        audit_service.log("employee.add", meta={"email": email, "role": role})
         flash(f"{full_name} added.", "success")
     except ValueError as e:
         flash(str(e), "danger")
@@ -98,7 +114,6 @@ def toggle_employee(user_id):
     if not target or str(target.tenant_id) != str(current_user.tenant_id):
         abort(404)
 
-    # Prevent deactivating the last active pharmacist
     if target.role == "pharmacist" and target.is_active:
         active_pharmacists = [
             u for u in user_service.list_by_role(current_user.tenant_id, "pharmacist")
@@ -108,17 +123,20 @@ def toggle_employee(user_id):
             flash("You cannot deactivate the last active pharmacist.", "danger")
             return redirect(url_for("owner.employees"))
 
-    new_state = user_service.toggle_active(user_id)
+    try:
+        new_state = user_service.toggle_active(user_id)
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("owner.employees"))
+
+    audit_service.log("employee.toggle",
+                      target=user_id, meta={"active": new_state})
     flash(
         f"{target.full_name} {'activated' if new_state else 'deactivated'}.",
         "success" if new_state else "warning",
     )
     return redirect(url_for("owner.employees"))
 
-
-# ---------------------------------------------------------------------------
-# Inventory (read-only view for owner)
-# ---------------------------------------------------------------------------
 
 @owner_bp.route("/inventory")
 def inventory():
@@ -127,24 +145,28 @@ def inventory():
     return render_template("owner/inventory.html", tenant=tenant, items=items)
 
 
-# ---------------------------------------------------------------------------
-# Sales & Reports
-# ---------------------------------------------------------------------------
-
 @owner_bp.route("/reports")
+@feature_required("reports")
 def reports():
     tenant = find_tenant_by_id(current_user.tenant_id)
     sales = sales_service.list_for_tenant(current_user.tenant_id, limit=1000)
     summary = sales_service.summary_for_tenant(current_user.tenant_id)
+
+    consolidated = None
+    if entitlement_service.tenant_has_feature(current_user.tenant_id, "consolidated_reports"):
+        consolidated = sales_service.consolidated_summary(current_user.tenant_id)
+
     return render_template(
         "owner/reports.html",
         tenant=tenant,
         sales=sales,
         summary=summary,
+        consolidated=consolidated,
     )
 
 
 @owner_bp.route("/reports/export.csv")
+@feature_required("reports")
 def export_csv():
     sales = sales_service.list_for_tenant(current_user.tenant_id, limit=10000)
 
@@ -172,11 +194,8 @@ def export_csv():
     )
 
 
-# ---------------------------------------------------------------------------
-# Suppliers
-# ---------------------------------------------------------------------------
-
 @owner_bp.route("/suppliers")
+@feature_required("suppliers")
 def suppliers():
     tenant = find_tenant_by_id(current_user.tenant_id)
     items = supplier_service.list_for_tenant(current_user.tenant_id)
@@ -184,6 +203,7 @@ def suppliers():
 
 
 @owner_bp.route("/suppliers/add", methods=["POST"])
+@feature_required("suppliers")
 def add_supplier():
     name = (request.form.get("name") or "").strip()
     phone = (request.form.get("phone") or "").strip()
@@ -197,11 +217,9 @@ def add_supplier():
     try:
         supplier_service.create_supplier(
             tenant_id=current_user.tenant_id,
-            name=name,
-            phone=phone,
-            email=email,
-            address=address,
+            name=name, phone=phone, email=email, address=address,
         )
+        audit_service.log("supplier.add", meta={"name": name})
         flash("Supplier saved.", "success")
     except ValueError as e:
         flash(str(e), "danger")
@@ -209,18 +227,90 @@ def add_supplier():
     return redirect(url_for("owner.suppliers"))
 
 
-# ---------------------------------------------------------------------------
-# Subscription
-# ---------------------------------------------------------------------------
+@owner_bp.route("/branches")
+@feature_required("multi_branch")
+def branches():
+    tenant = find_tenant_by_id(current_user.tenant_id)
+    items = branch_service.list_for_tenant(current_user.tenant_id, active_only=False)
+    tier = entitlement_service.limits_for(current_user.tenant_id)
+    branch_limit = tier.get("branches", 1)
+    can_add = (branch_limit == -1) or (len(items) < branch_limit)
+
+    return render_template(
+        "owner/branches.html",
+        tenant=tenant,
+        branches=items,
+        branch_limit=branch_limit,
+        can_add_branch=can_add,
+        tier_label=tier.get("label", "Business"),
+    )
+
+
+@owner_bp.route("/branches/add", methods=["POST"])
+@feature_required("multi_branch")
+def add_branch():
+    name = (request.form.get("name") or "").strip()
+    address = (request.form.get("address") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    try:
+        bid = branch_service.create_branch(
+            current_user.tenant_id, name=name, address=address, phone=phone,
+        )
+        audit_service.log("branch.create", target=str(bid), meta={"name": name})
+        flash(f"Branch '{name}' created.", "success")
+    except ValueError as e:
+        flash(str(e), "danger")
+    return redirect(url_for("owner.branches"))
+
+
+@owner_bp.route("/branches/<branch_id>/default", methods=["POST"])
+@feature_required("multi_branch")
+def make_branch_default(branch_id):
+    ok = branch_service.set_default(current_user.tenant_id, branch_id)
+    if ok:
+        audit_service.log("branch.set_default", target=branch_id)
+        flash("Default branch updated.", "success")
+    else:
+        flash("Could not update branch.", "danger")
+    return redirect(url_for("owner.branches"))
+
+
+@owner_bp.route("/branches/<branch_id>/toggle", methods=["POST"])
+@feature_required("multi_branch")
+def toggle_branch(branch_id):
+    b = branch_service.get(current_user.tenant_id, branch_id)
+    if not b:
+        abort(404)
+    branch_service.update(current_user.tenant_id, branch_id, is_active=not b.is_active)
+    audit_service.log("branch.toggle",
+                      target=branch_id, meta={"active": not b.is_active})
+    flash(f"Branch {'activated' if not b.is_active else 'deactivated'}.", "success")
+    return redirect(url_for("owner.branches"))
+
+
+@owner_bp.route("/audit")
+@feature_required("audit_log")
+def audit():
+    tenant = find_tenant_by_id(current_user.tenant_id)
+    return render_template("owner/audit.html", tenant=tenant)
+
 
 @owner_bp.route("/subscription")
 def subscription():
     tenant = find_tenant_by_id(current_user.tenant_id)
     payments = payments_service.list_for_tenant(current_user.tenant_id, limit=50)
+    tiers = current_app.config["PRICING_TIERS"]
+    tier_order = current_app.config["TIER_ORDER"]
+    current_tier = tenant.tier if tenant and tenant.tier in tiers else "pro"
+    pending_tier = tenant.pending_tier if tenant and tenant.pending_tier in tiers else None
     return render_template(
         "owner/subscription.html",
         tenant=tenant,
         payments=payments,
+        tiers=tiers,
+        tier_order=tier_order,
+        current_tier=current_tier,
+        pending_tier=pending_tier,
     )
 
 

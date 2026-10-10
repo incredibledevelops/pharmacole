@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from extensions import mongo
 from utils import oid, to_float, to_int
+from app.services import audit_service
 
 
-def create_item(tenant_id, data):
-    """Insert one inventory batch. data must have name, sku, quantity, expiry_date."""
+def create_item(tenant_id, data, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         raise ValueError("Invalid tenant")
@@ -20,6 +20,7 @@ def create_item(tenant_id, data):
 
     doc = {
         "tenant_id": tid,
+        "branch_id": oid(branch_id) if branch_id else None,  # NEW
         "name": name,
         "sku": sku,
         "category": (data.get("category") or "").strip() or None,
@@ -38,14 +39,23 @@ def create_item(tenant_id, data):
         "updated_at": datetime.utcnow(),
     }
     res = mongo.db.inventory.insert_one(doc)
+    audit_service.log(
+        "inventory.create",
+        tenant_id=tid,
+        branch_id=doc["branch_id"],
+        target=str(res.inserted_id),
+        meta={"name": name, "sku": sku, "qty": doc["quantity"]},
+    )
     return res.inserted_id
 
 
-def list_for_tenant(tenant_id, search=None, limit=1000):
+def list_for_tenant(tenant_id, search=None, limit=1000, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return []
     q = {"tenant_id": tid}
+    if branch_id:
+        q["branch_id"] = oid(branch_id)
     if search:
         s = search.strip()
         q["$or"] = [
@@ -64,19 +74,25 @@ def get_item(tenant_id, item_id):
     return mongo.db.inventory.find_one({"_id": iid, "tenant_id": tid})
 
 
-def count_for_tenant(tenant_id):
+def count_for_tenant(tenant_id, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return 0
-    return mongo.db.inventory.count_documents({"tenant_id": tid})
+    q = {"tenant_id": tid}
+    if branch_id:
+        q["branch_id"] = oid(branch_id)
+    return mongo.db.inventory.count_documents(q)
 
 
-def low_stock(tenant_id, limit=50):
+def low_stock(tenant_id, limit=50, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return []
+    match = {"tenant_id": tid}
+    if branch_id:
+        match["branch_id"] = oid(branch_id)
     pipeline = [
-        {"$match": {"tenant_id": tid}},
+        {"$match": match},
         {"$match": {"$expr": {"$lte": ["$quantity", "$min_threshold"]}}},
         {"$sort": {"quantity": 1}},
         {"$limit": limit},
@@ -84,25 +100,100 @@ def low_stock(tenant_id, limit=50):
     return list(mongo.db.inventory.aggregate(pipeline))
 
 
-def expiring_within(tenant_id, days=30, limit=200):
+def expiring_within(tenant_id, days=30, limit=200, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return []
     cutoff = datetime.utcnow()
-    horizon = cutoff.replace(hour=23, minute=59, second=59) 
-    from datetime import timedelta
     horizon = cutoff + timedelta(days=days)
-    cur = (
-        mongo.db.inventory
-        .find({
-            "tenant_id": tid,
-            "expiry_date": {"$gte": cutoff, "$lte": horizon},
-            "quantity": {"$gt": 0},
-        })
-        .sort("expiry_date", 1)
-        .limit(limit)
-    )
+    q = {
+        "tenant_id": tid,
+        "expiry_date": {"$gte": cutoff, "$lte": horizon},
+        "quantity": {"$gt": 0},
+    }
+    if branch_id:
+        q["branch_id"] = oid(branch_id)
+    cur = mongo.db.inventory.find(q).sort("expiry_date", 1).limit(limit)
     return list(cur)
+
+
+def update_item(tenant_id, item_id, data, actor_id=None):
+    """Update an item and audit price changes."""
+    tid = oid(tenant_id)
+    iid = oid(item_id)
+    if not tid or not iid:
+        raise ValueError("Invalid item")
+
+    existing = mongo.db.inventory.find_one({"_id": iid, "tenant_id": tid})
+    if not existing:
+        raise ValueError("Item not found")
+
+    allowed = {
+        "name", "sku", "category", "dosage_form", "pack_size", "description",
+        "cost_price", "selling_price", "tax_rate", "quantity", "min_threshold",
+        "batch_number", "expiry_date", "supplier",
+    }
+    patch = {}
+    for k in allowed:
+        if k in data:
+            v = data[k]
+            if k in ("cost_price", "selling_price", "tax_rate"):
+                v = to_float(v, 0.0)
+            elif k in ("quantity", "min_threshold"):
+                v = to_int(v, 0)
+            elif k == "expiry_date":
+                v = _to_dt(v)
+            patch[k] = v
+
+    if not patch:
+        return False
+
+    patch["updated_at"] = datetime.utcnow()
+    mongo.db.inventory.update_one({"_id": iid, "tenant_id": tid}, {"$set": patch})
+
+    # Audit price changes specifically
+    for field in ("selling_price", "cost_price"):
+        if field in patch and float(existing.get(field, 0)) != float(patch[field]):
+            audit_service.log(
+                "inventory.price_change",
+                tenant_id=tid,
+                target=str(iid),
+                meta={
+                    "field": field,
+                    "from": float(existing.get(field, 0)),
+                    "to": float(patch[field]),
+                    "name": existing.get("name"),
+                },
+            )
+
+    audit_service.log(
+        "inventory.update",
+        tenant_id=tid,
+        target=str(iid),
+        meta={"fields": list(patch.keys())},
+    )
+    return True
+
+
+def delete_item(tenant_id, item_id):
+    tid = oid(tenant_id)
+    iid = oid(item_id)
+    if not tid or not iid:
+        raise ValueError("Invalid item")
+
+    item = mongo.db.inventory.find_one({"_id": iid, "tenant_id": tid})
+    if not item:
+        raise ValueError("Item not found")
+
+    mongo.db.inventory.delete_one({"_id": iid, "tenant_id": tid})
+    audit_service.log(
+        "inventory.delete",
+        tenant_id=tid,
+        target=str(iid),
+        meta={"name": item.get("name"), "sku": item.get("sku"),
+              "qty": item.get("quantity")},
+    )
+    return True
 
 
 def adjust_stock(tenant_id, item_id, delta, reason=None, actor_id=None):
@@ -129,6 +220,7 @@ def adjust_stock(tenant_id, item_id, delta, reason=None, actor_id=None):
     )
     mongo.db.stock_adjustments.insert_one({
         "tenant_id": tid,
+        "branch_id": item.get("branch_id"),
         "inventory_id": iid,
         "delta": delta,
         "reason": (reason or "unspecified").strip(),
@@ -137,6 +229,14 @@ def adjust_stock(tenant_id, item_id, delta, reason=None, actor_id=None):
         "actor_id": oid(actor_id) if actor_id else None,
         "created_at": datetime.utcnow(),
     })
+
+    audit_service.log(
+        "inventory.adjust",
+        tenant_id=tid,
+        target=str(iid),
+        meta={"delta": delta, "reason": reason,
+              "old": int(item.get("quantity", 0)), "new": new_qty},
+    )
     return new_qty
 
 

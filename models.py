@@ -4,6 +4,8 @@ from bson.errors import InvalidId
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo.errors import DuplicateKeyError
+import secrets
+import string
 
 from extensions import mongo, login_manager
 from utils import oid
@@ -21,6 +23,8 @@ class User(UserMixin):
         self.password_hash = data.get("password_hash") or ""
         self.role = data.get("role", "cashier")
         self.tenant_id = str(data["tenant_id"]) if data.get("tenant_id") else None
+        # NEW — branch scoping. None => has access to all branches in tenant.
+        self.branch_id = str(data["branch_id"]) if data.get("branch_id") else None
         self.is_active_user = bool(data.get("is_active", True))
         self.phone = data.get("phone")
         self.created_at = data.get("created_at") or datetime.utcnow()
@@ -49,7 +53,7 @@ class User(UserMixin):
 
 
 # ---------------------------------------------------------------------------
-# Tenant
+# Tenant  (carries tier + pending tier + branding + multi-branch limits)
 # ---------------------------------------------------------------------------
 
 class Tenant:
@@ -67,12 +71,25 @@ class Tenant:
         self.subscription_expires_at = data.get("subscription_expires_at")
         self.paystack_customer_code = data.get("paystack_customer_code")
         self.created_at = data.get("created_at") or datetime.utcnow()
+
+        # Tier + pending tier + branding + multi-branch
+        self.tier = data.get("tier", "pro")
+        self.pending_tier = data.get("pending_tier")
+        self.logo_url = data.get("logo_url")
+        self.receipt_header = data.get("receipt_header")
+        self.receipt_footer = data.get("receipt_footer")
+        self.tin = data.get("tin")
+        self.business_reg_no = data.get("business_reg_no")
         self.data = data
+
+    @property
+    def tier_limits(self):
+        from flask import current_app
+        tiers = current_app.config["PRICING_TIERS"]
+        return tiers.get(self.tier, tiers["pro"])
 
     @staticmethod
     def generate_code():
-        import secrets
-        import string
         chars = string.ascii_uppercase + string.digits
         for _ in range(10):
             code = "GH-" + "".join(secrets.choice(chars) for _ in range(6))
@@ -82,11 +99,37 @@ class Tenant:
 
 
 # ---------------------------------------------------------------------------
+# Branch
+# ---------------------------------------------------------------------------
+
+class Branch:
+    def __init__(self, data):
+        self._id = str(data["_id"])
+        self.tenant_id = str(data["tenant_id"])
+        self.name = data.get("name", "Main")
+        self.code = data.get("branch_code", "MAIN")
+        self.address = data.get("address")
+        self.phone = data.get("phone")
+        self.is_default = bool(data.get("is_default", False))
+        self.is_active = bool(data.get("is_active", True))
+        self.created_at = data.get("created_at") or datetime.utcnow()
+        self.data = data
+
+    @staticmethod
+    def generate_code(tenant_id, name):
+        base = "".join(ch for ch in (name or "BR").upper() if ch.isalnum())[:4] or "BR"
+        for _ in range(20):
+            code = f"{base}-{secrets.token_hex(2).upper()}"
+            if not mongo.db.branches.find_one({"tenant_id": oid(tenant_id), "branch_code": code}):
+                return code
+        return f"BR-{secrets.token_hex(3).upper()}"
+
+
+# ---------------------------------------------------------------------------
 # Lookups
 # ---------------------------------------------------------------------------
 
 def find_user_by_id(user_id):
-    """Accepts either 'hex' or 'hex:version'."""
     if not user_id:
         return None
     raw = str(user_id)
@@ -134,6 +177,14 @@ def find_tenant_by_code(code):
     return Tenant(data) if data else None
 
 
+def find_branch_by_id(branch_id):
+    _id = oid(branch_id)
+    if not _id:
+        return None
+    data = mongo.db.branches.find_one({"_id": _id})
+    return Branch(data) if data else None
+
+
 # ---------------------------------------------------------------------------
 # Flask-Login user loader
 # ---------------------------------------------------------------------------
@@ -159,6 +210,11 @@ def ensure_indexes():
     db.users.create_index("email", unique=True)
     db.users.create_index("tenant_id")
     db.users.create_index([("tenant_id", 1), ("role", 1)])
+    db.users.create_index([("tenant_id", 1), ("branch_id", 1)])
+
+    # branches
+    db.branches.create_index([("tenant_id", 1), ("branch_code", 1)], unique=True)
+    db.branches.create_index("tenant_id")
 
     # inventory
     db.inventory.create_index(
@@ -168,11 +224,22 @@ def ensure_indexes():
     )
     db.inventory.create_index([("tenant_id", 1), ("expiry_date", 1)])
     db.inventory.create_index([("tenant_id", 1), ("quantity", 1)])
+    db.inventory.create_index([("tenant_id", 1), ("branch_id", 1)])
 
     # sales
     db.sales.create_index("receipt_no", unique=True)
     db.sales.create_index([("tenant_id", 1), ("timestamp", -1)])
     db.sales.create_index([("tenant_id", 1), ("cashier_id", 1)])
+    db.sales.create_index([("tenant_id", 1), ("branch_id", 1), ("timestamp", -1)])
+    # Offline sync idempotency. Only documents where client_uuid is actually
+    # a string are indexed, so existing sales without client_uuid (or with
+    # client_uuid: null) are ignored entirely.
+    db.sales.create_index(
+        [("tenant_id", 1), ("client_uuid", 1)],
+        unique=True,
+        partialFilterExpression={"client_uuid": {"$type": "string"}},
+        name="tenant_id_1_client_uuid_1",
+    )
 
     # payments
     db.payments.create_index("paystack_reference", unique=True, sparse=True)
@@ -182,25 +249,33 @@ def ensure_indexes():
     # prescriptions
     db.prescriptions.create_index([("tenant_id", 1), ("status", 1)])
     db.prescriptions.create_index([("tenant_id", 1), ("created_at", -1)])
+    db.prescriptions.create_index([("tenant_id", 1), ("branch_id", 1)])
 
     # suppliers
     db.suppliers.create_index([("tenant_id", 1), ("name", 1)], unique=True)
 
-    # stock_adjustments
+    # stock adjustments
     db.stock_adjustments.create_index([("tenant_id", 1), ("created_at", -1)])
     db.stock_adjustments.create_index("inventory_id")
 
-    # held_orders
+    # held orders
     db.held_orders.create_index([("tenant_id", 1), ("cashier_id", 1), ("created_at", -1)])
+    db.held_orders.create_index([("tenant_id", 1), ("branch_id", 1)])
 
     # disputes
     db.disputes.create_index([("tenant_id", 1), ("created_at", -1)])
     db.disputes.create_index("status")
 
-    # audit_logs
+    # audit logs
     db.audit_logs.create_index([("tenant_id", 1), ("created_at", -1)])
     db.audit_logs.create_index([("actor_id", 1), ("action", 1)])
+    db.audit_logs.create_index([("tenant_id", 1), ("action", 1), ("created_at", -1)])
+    db.audit_logs.create_index([("tenant_id", 1), ("actor_id", 1), ("created_at", -1)])
 
-    # subscription_events
+    # subscription events
     db.subscription_events.create_index([("tenant_id", 1), ("created_at", -1)])
     db.subscription_events.create_index("event_type")
+
+    # push subscriptions / sync queue
+    db.push_subscriptions.create_index([("tenant_id", 1), ("user_id", 1)], unique=True)
+    db.sync_queue.create_index([("tenant_id", 1), ("created_at", -1)])

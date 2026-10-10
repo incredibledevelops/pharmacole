@@ -3,6 +3,7 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_cors import CORS
 
 mongo = PyMongo()
 
@@ -14,9 +15,11 @@ login_manager.session_protection = "strong"
 
 csrf = CSRFProtect()
 
+cors = CORS()
+
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[],          # actual default comes from config at init
+    default_limits=[],
     headers_enabled=True,
-    storage_uri="memory://",     # overridden in create_app
+    storage_uri="memory://",
 )

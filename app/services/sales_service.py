@@ -3,6 +3,7 @@ import string
 from datetime import datetime, timedelta
 from extensions import mongo
 from utils import oid, to_float, to_int
+from app.services import audit_service
 
 
 def _generate_receipt_no():
@@ -11,8 +12,10 @@ def _generate_receipt_no():
     return f"RCP-{stamp}-{suffix}"
 
 
-def record_sale(tenant_id, cashier, items, payment_method):
-    """items: list of {id, name, price, qty}. Returns dict with receipt_no etc."""
+def record_sale(tenant_id, cashier, items, payment_method,
+                branch_id=None, client_uuid=None,
+                customer_name=None, discount=0.0):
+    """items: [{id, name, price, qty}]. Idempotent when client_uuid is sent."""
     tid = oid(tenant_id)
     if not tid:
         raise ValueError("Invalid tenant")
@@ -22,6 +25,12 @@ def record_sale(tenant_id, cashier, items, payment_method):
 
     if payment_method not in ("cash", "card", "momo"):
         raise ValueError("Invalid payment method")
+
+    # Offline idempotency
+    if client_uuid:
+        existing = mongo.db.sales.find_one({"tenant_id": tid, "client_uuid": client_uuid})
+        if existing:
+            return _sale_to_dict(existing)
 
     clean_items = []
     subtotal = 0.0
@@ -49,7 +58,6 @@ def record_sale(tenant_id, cashier, items, payment_method):
 
         price = to_float(stock.get("selling_price"), 0.0)
         tax_rate = to_float(stock.get("tax_rate"), 5.0)
-
         line_subtotal = price * qty
         line_vat = line_subtotal * (tax_rate / 100.0)
 
@@ -63,109 +71,165 @@ def record_sale(tenant_id, cashier, items, payment_method):
             "line_subtotal": round(line_subtotal, 2),
             "line_vat": round(line_vat, 2),
         })
-
         subtotal += line_subtotal
         vat_total += line_vat
 
-    total = round(subtotal + vat_total, 2)
+    discount = to_float(discount, 0.0)
+    total = round(subtotal + vat_total - discount, 2)
 
     receipt_no = _generate_receipt_no()
     sale_doc = {
         "tenant_id": tid,
+        "branch_id": oid(branch_id) if branch_id else None,
         "receipt_no": receipt_no,
+        "client_uuid": client_uuid,
         "cashier_id": oid(cashier._id) if cashier else None,
         "cashier_name": getattr(cashier, "name", "—") if cashier else "—",
+        "customer_name": (customer_name or "").strip() or None,
         "items": clean_items,
         "subtotal": round(subtotal, 2),
         "vat": round(vat_total, 2),
+        "discount": round(discount, 2),
         "total_amount": total,
         "payment_method": payment_method,
         "timestamp": datetime.utcnow(),
     }
     mongo.db.sales.insert_one(sale_doc)
 
-    # Decrement stock atomically
     for line in clean_items:
         mongo.db.inventory.update_one(
             {"_id": line["inventory_id"], "tenant_id": tid},
-            {
-                "$inc": {"quantity": -line["qty"]},
-                "$set": {"updated_at": datetime.utcnow()},
-            },
+            {"$inc": {"quantity": -line["qty"]},
+             "$set": {"updated_at": datetime.utcnow()}},
         )
 
+    audit_service.log(
+        "sale.record",
+        tenant_id=tid,
+        branch_id=sale_doc["branch_id"],
+        target=receipt_no,
+        meta={"total": total, "items": len(clean_items), "method": payment_method},
+    )
+
+    return _sale_to_dict(sale_doc)
+
+
+def _sale_to_dict(doc):
     return {
-        "receipt_no": receipt_no,
-        "subtotal": sale_doc["subtotal"],
-        "vat": sale_doc["vat"],
-        "total": total,
-        "items": clean_items,
+        "receipt_no": doc["receipt_no"],
+        "subtotal": doc["subtotal"],
+        "vat": doc["vat"],
+        "discount": doc.get("discount", 0.0),
+        "total": doc["total_amount"],
+        "total_amount": doc["total_amount"],
+        "items": [
+            {
+                "name": i["name"],
+                "qty": i["qty"],
+                "price": i["price"],
+                "line_subtotal": i["line_subtotal"],
+                "line_vat": i["line_vat"],
+                "sku": i.get("sku"),
+            } for i in doc["items"]
+        ],
+        "payment_method": doc["payment_method"],
+        "timestamp": doc["timestamp"].isoformat() if isinstance(doc["timestamp"], datetime) else doc["timestamp"],
+        "branch_id": str(doc["branch_id"]) if doc.get("branch_id") else None,
     }
 
 
-def list_for_tenant(tenant_id, limit=500, since=None):
+def list_for_tenant(tenant_id, limit=500, since=None, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return []
     q = {"tenant_id": tid}
     if since:
         q["timestamp"] = {"$gte": since}
+    if branch_id:
+        q["branch_id"] = oid(branch_id)
     cur = mongo.db.sales.find(q).sort("timestamp", -1).limit(limit)
     return list(cur)
 
 
-def list_for_cashier_today(tenant_id, cashier_id):
+def list_for_cashier_today(tenant_id, cashier_id, branch_id=None):
     tid = oid(tenant_id)
     cid = oid(cashier_id)
     if not tid or not cid:
         return []
     start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    cur = (
-        mongo.db.sales
-        .find({"tenant_id": tid, "cashier_id": cid, "timestamp": {"$gte": start}})
-        .sort("timestamp", -1)
-    )
+    q = {"tenant_id": tid, "cashier_id": cid, "timestamp": {"$gte": start}}
+    if branch_id:
+        q["branch_id"] = oid(branch_id)
+    cur = mongo.db.sales.find(q).sort("timestamp", -1)
     return list(cur)
 
 
-def revenue_today(tenant_id):
+def revenue_today(tenant_id, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return 0.0
     start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    match = {"tenant_id": tid, "timestamp": {"$gte": start}}
+    if branch_id:
+        match["branch_id"] = oid(branch_id)
     pipeline = [
-        {"$match": {"tenant_id": tid, "timestamp": {"$gte": start}}},
+        {"$match": match},
         {"$group": {"_id": None, "total": {"$sum": "$total_amount"}}},
     ]
     res = list(mongo.db.sales.aggregate(pipeline))
     return float(res[0]["total"]) if res else 0.0
 
 
-def summary_for_tenant(tenant_id):
+def summary_for_tenant(tenant_id, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         return {"revenue": 0.0, "transactions": 0, "average": 0.0}
+    match = {"tenant_id": tid}
+    if branch_id:
+        match["branch_id"] = oid(branch_id)
     pipeline = [
-        {"$match": {"tenant_id": tid}},
-        {
-            "$group": {
-                "_id": None,
-                "total": {"$sum": "$total_amount"},
-                "count": {"$sum": 1},
-            }
-        },
+        {"$match": match},
+        {"$group": {"_id": None, "total": {"$sum": "$total_amount"},
+                    "count": {"$sum": 1}}},
     ]
     res = list(mongo.db.sales.aggregate(pipeline))
     if not res:
         return {"revenue": 0.0, "transactions": 0, "average": 0.0}
     total = float(res[0]["total"])
     count = int(res[0]["count"])
-    return {
-        "revenue": total,
-        "transactions": count,
-        "average": (total / count) if count else 0.0,
-    }
+    return {"revenue": total, "transactions": count,
+            "average": (total / count) if count else 0.0}
 
 
-def recent_sales(tenant_id, limit=10):
-    return list_for_tenant(tenant_id, limit=limit)
+def recent_sales(tenant_id, limit=10, branch_id=None):
+    return list_for_tenant(tenant_id, limit=limit, branch_id=branch_id)
+
+
+# NEW — consolidated across branches for Business/Enterprise
+def consolidated_summary(tenant_id):
+    tid = oid(tenant_id)
+    if not tid:
+        return []
+    pipeline = [
+        {"$match": {"tenant_id": tid}},
+        {"$group": {
+            "_id": "$branch_id",
+            "revenue": {"$sum": "$total_amount"},
+            "count": {"$sum": 1},
+        }},
+    ]
+    rows = list(mongo.db.sales.aggregate(pipeline))
+    out = []
+    for r in rows:
+        bid = r["_id"]
+        name = "All / Unassigned"
+        if bid:
+            b = mongo.db.branches.find_one({"_id": bid})
+            name = b.get("name") if b else str(bid)
+        out.append({
+            "branch_id": str(bid) if bid else None,
+            "branch_name": name,
+            "revenue": float(r["revenue"]),
+            "transactions": int(r["count"]),
+        })
+    return out

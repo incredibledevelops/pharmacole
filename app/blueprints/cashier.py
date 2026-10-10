@@ -13,23 +13,17 @@ cashier_bp = Blueprint("cashier", __name__, url_prefix="/cashier")
 
 @cashier_bp.before_request
 @login_required
-@role_required("cashier", "owner")  # Owners can use POS too
+@role_required("cashier", "owner")
 @subscription_required
 def _guard():
     return None
 
 
-# ---------------------------------------------------------------------------
-# POS
-# ---------------------------------------------------------------------------
-
 @cashier_bp.route("/pos")
 def pos():
     tenant = find_tenant_by_id(current_user.tenant_id)
     products = inventory_service.list_for_tenant(current_user.tenant_id, limit=2000)
-    # keep only in-stock products for the grid
     products = [p for p in products if int(p.get("quantity", 0)) > 0]
-
     today_total = sales_service.revenue_today(current_user.tenant_id)
 
     return render_template(
@@ -39,10 +33,6 @@ def pos():
         today_total=today_total,
     )
 
-
-# ---------------------------------------------------------------------------
-# Checkout (JSON API)
-# ---------------------------------------------------------------------------
 
 @cashier_bp.route("/checkout", methods=["POST"])
 @limiter.limit("300 per hour")
@@ -71,10 +61,6 @@ def checkout():
     return jsonify(receipt)
 
 
-# ---------------------------------------------------------------------------
-# Shift report
-# ---------------------------------------------------------------------------
-
 @cashier_bp.route("/shift")
 def shift_report():
     tenant = find_tenant_by_id(current_user.tenant_id)
@@ -82,15 +68,9 @@ def shift_report():
     total = sum(float(s.get("total_amount", 0)) for s in sales)
     return render_template(
         "cashier/shift_report.html",
-        tenant=tenant,
-        sales=sales,
-        total=total,
+        tenant=tenant, sales=sales, total=total,
     )
 
-
-# ---------------------------------------------------------------------------
-# Held orders
-# ---------------------------------------------------------------------------
 
 @cashier_bp.route("/held")
 def held_orders():
@@ -128,7 +108,6 @@ def resume_held(held_id):
     products = [p for p in products if int(p.get("quantity", 0)) > 0]
     today_total = sales_service.revenue_today(current_user.tenant_id)
 
-    # Rehydrate cart into template
     cart = []
     for line in held.get("items", []):
         cart.append({
@@ -140,15 +119,14 @@ def resume_held(held_id):
 
     return render_template(
         "cashier/pos.html",
-        tenant=tenant,
-        products=products,
-        today_total=today_total,
-        initial_cart=cart,
+        tenant=tenant, products=products,
+        today_total=today_total, initial_cart=cart,
     )
 
 
 @cashier_bp.route("/held/<held_id>/delete", methods=["POST"])
 def delete_held(held_id):
     ok = held_order_service.delete(current_user.tenant_id, held_id)
-    flash("Held order removed." if ok else "Could not remove.", "success" if ok else "danger")
+    flash("Held order removed." if ok else "Could not remove.",
+          "success" if ok else "danger")
     return redirect(url_for("cashier.held_orders"))

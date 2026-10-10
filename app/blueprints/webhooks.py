@@ -36,6 +36,8 @@ def paystack():
             record = payments_service.find_by_reference(reference)
             if record and record.get("status") != "success":
                 payments_service.mark_paid(reference, data)
+                # Promote the pending tier (if any) before activating
+                tenant_service.apply_pending_tier(record["tenant_id"])
                 customer_code = (data.get("customer") or {}).get("customer_code")
                 tenant_service.activate(
                     record["tenant_id"], paystack_customer_code=customer_code
@@ -46,5 +48,4 @@ def paystack():
         if reference:
             payments_service.mark_failed(reference, reason=data.get("gateway_response"))
 
-    # Always return 200 so Paystack stops retrying
     return jsonify({"status": "ok"}), 200
