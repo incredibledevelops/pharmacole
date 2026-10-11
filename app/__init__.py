@@ -53,12 +53,6 @@ def create_app(config_class=None):
 
     # ------------------------------------------------------------------
     # LEGACY URL REDIRECTS
-    #
-    # The `auth` blueprint was moved under the /auth/* prefix so that URLs
-    # match their semantic owner (auth.login, auth.signup, ...). Any old
-    # bookmarks, external links, sitemap entries or robots.txt rules that
-    # point at the root-level versions get a permanent 301 redirect to the
-    # canonical location. Query strings (e.g. ?tier=business) are preserved.
     # ------------------------------------------------------------------
     @app.route("/login", methods=["GET", "POST"])
     def _legacy_login():
@@ -77,7 +71,7 @@ def create_app(config_class=None):
         return redirect(url_for("auth.payment", **request.args.to_dict()), code=301)
 
     # ------------------------------------------------------------------
-    # Blueprints — register each one individually so a failure is obvious
+    # Blueprints
     # ------------------------------------------------------------------
     def _reg(bp, name):
         try:
@@ -105,11 +99,12 @@ def create_app(config_class=None):
     _reg(cashier_bp, "cashier")
     _reg(super_admin_bp, "super_admin")
 
-    # API + PWA are optional-ish: if a submodule is broken, the rest of the
-    # app keeps working — log loudly but continue.
+    # API + PWA
+    api_registered = False
     try:
         from app.blueprints.api import api_bp
         _reg(api_bp, "api")
+        api_registered = True
     except Exception as e:
         app.logger.error("API blueprint NOT loaded: %s", e)
 
@@ -118,6 +113,37 @@ def create_app(config_class=None):
         _reg(pwa_bp, "pwa")
     except Exception as e:
         app.logger.error("PWA blueprint NOT loaded: %s", e)
+
+    # ------------------------------------------------------------------
+    # CSRF exemptions
+    #
+    # The /api/v1/* blueprint is a stateless, JWT-authenticated API. It is
+    # consumed by:
+    #   • the Electron desktop app (no cookie session, no CSRF token)
+    #   • offline POS sync (no cookie session, no CSRF token)
+    #   • external integrations on the Enterprise tier
+    #
+    # Flask-WTF's CSRFProtect only makes sense for cookie-authenticated
+    # browser POSTs. Applying it to the API causes every desktop login to
+    # fail with a bare "HTTP 400" HTML response.
+    #
+    # Flask-WTF supports blueprint-scoped exemptions via csrf.exempt(bp).
+    # ------------------------------------------------------------------
+    if api_registered:
+        try:
+            from app.blueprints.api import api_bp as _api_bp
+            csrf.exempt(_api_bp)
+            app.logger.info("CSRF exemption applied to /api/v1/*")
+        except Exception as e:
+            app.logger.error("Failed to exempt API blueprint from CSRF: %s", e)
+
+    # Webhooks are called by Paystack, never by a browser session.
+    try:
+        from app.blueprints.webhooks import webhooks_bp as _webhooks_bp
+        csrf.exempt(_webhooks_bp)
+        app.logger.info("CSRF exemption applied to /webhooks/*")
+    except Exception as e:
+        app.logger.error("Failed to exempt webhooks blueprint from CSRF: %s", e)
 
     from app.errors import register_error_handlers
     register_error_handlers(app)
@@ -154,7 +180,7 @@ def create_app(config_class=None):
         return resp
 
     # ------------------------------------------------------------------
-    # Startup banner — prints every route so you can SEE it registered
+    # Startup banner
     # ------------------------------------------------------------------
     with app.app_context():
         try:

@@ -1,3 +1,4 @@
+# app/blueprints/api/auth.py
 from flask import request, jsonify, g
 from datetime import datetime
 
@@ -12,10 +13,10 @@ from decorators import token_required
 @limiter.limit("20 per minute")
 def login():
     data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").lower().strip()
-    password = data.get("password") or ""
-    tenant_code = (data.get("tenant_code") or "").strip()
-    login_type = (data.get("login_type") or "tenant").strip()
+    email       = (data.get("email") or "").lower().strip()
+    password    = data.get("password") or ""
+    tenant_code = (data.get("tenant_code") or "").strip().upper()
+    login_type  = (data.get("login_type") or "tenant").strip()
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
@@ -53,7 +54,7 @@ def login():
     response = {
         **tokens,
         "tenant": {
-            "id": tenant._id if tenant else None,
+            "id":   tenant._id if tenant else None,
             "code": tenant.tenant_code if tenant else None,
             "name": tenant.pharmacy_name if tenant else None,
             "tier": tenant.tier if tenant else None,
@@ -64,60 +65,3 @@ def login():
         } if branch else None,
     }
     return jsonify(response), 200
-
-
-@api_bp.route("/auth/refresh", methods=["POST"])
-@limiter.limit("60 per hour")
-def refresh():
-    data = request.get_json(silent=True) or {}
-    token = data.get("refresh") or ""
-    if not token:
-        return jsonify({"error": "Missing refresh token"}), 400
-    try:
-        payload = auth_service.decode_token(token, expected_type="refresh")
-    except auth_service.TokenError as e:
-        return jsonify({"error": str(e)}), 401
-
-    from models import find_user_by_id
-    user = find_user_by_id(payload["sub"])
-    if not user or not user.is_active:
-        return jsonify({"error": "User not found"}), 401
-    return jsonify(auth_service.issue_tokens(user)), 200
-
-
-@api_bp.route("/auth/me", methods=["GET"])
-@token_required
-def me():
-    u = g.api_user
-    t = g.api_tenant
-    return jsonify({
-        "user": {
-            "id": u._id,
-            "email": u.email,
-            "name": u.name,
-            "role": u.role,
-            "tenant_id": u.tenant_id,
-            "branch_id": u.branch_id,
-        },
-        "tenant": {
-            "id": t._id,
-            "code": t.tenant_code,
-            "name": t.pharmacy_name,
-            "tier": t.tier,
-            "pending_tier": t.pending_tier,
-            "subscription_status": t.subscription_status,
-            "subscription_expires_at": t.subscription_expires_at.isoformat() if t.subscription_expires_at else None,
-            "logo_url": t.logo_url,
-        } if t else None,
-    }), 200
-
-
-@api_bp.route("/auth/logout", methods=["POST"])
-@token_required
-def logout():
-    from extensions import mongo
-    from utils import oid
-    mongo.db.users.update_one(
-        {"_id": oid(g.api_user._id)}, {"$inc": {"session_version": 1}}
-    )
-    return jsonify({"ok": True}), 200
