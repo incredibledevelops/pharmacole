@@ -46,7 +46,7 @@
       </p>
 
       <!-- PLAN SELECTOR -->
-      <div class="mb-6">
+      <div class="mb-4">
         <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2">Choose your plan</p>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
           {% for key in tier_order %}
@@ -58,7 +58,8 @@
                 {% else %}
                   border-gray-200 hover:border-primary/50 bg-white
                 {% endif %}"
-              data-tier="{{ key }}">
+              data-tier="{{ key }}"
+              aria-pressed="{{ 'true' if key == selected_tier else 'false' }}">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs font-bold text-gray-800">{{ t.label }}</span>
                 {% if key == selected_tier %}
@@ -81,6 +82,12 @@
         </div>
       </div>
 
+      <!-- Plan comparison strip -->
+      <div id="planFeatures" class="mb-5 rounded-xl bg-gradient-to-br from-teal-50/60 to-white border border-teal-100/60 p-3 text-xs text-gray-600 flex items-start gap-2 transition-all">
+        <i class="fas fa-circle-info text-primary mt-0.5 text-[11px] flex-shrink-0"></i>
+        <span id="planFeaturesText">Select a plan to see what's included.</span>
+      </div>
+
       <!-- Live progress bar -->
       <div class="mb-6 flex items-center gap-3">
         <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -91,7 +98,7 @@
         </p>
       </div>
 
-      <form method="POST" action="{{ url_for('auth.signup') }}" class="grid md:grid-cols-2 gap-4" novalidate id="signupForm" autocomplete="on">
+      <form method="POST" action="{{ url_for('auth.signup') }}" class="grid md:grid-cols-2 gap-4" id="signupForm" autocomplete="on" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="tier" id="tierInput" value="{{ selected_tier }}">
 
@@ -102,10 +109,13 @@
           <div class="relative mt-1">
             <i class="fas fa-store absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="pharmacy_name" name="pharmacy_name" required placeholder="GreenHealth Pharmacy"
+              autocomplete="organization"
               value="{{ form.get('pharmacy_name','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              class="w-full pl-11 pr-10 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i id="pharmacyTick" class="hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm"></i>
           </div>
+          <p id="tenantPreview" class="text-[11px] text-gray-400 mt-1 leading-relaxed"></p>
         </div>
 
         <div>
@@ -115,9 +125,11 @@
           <div class="relative mt-1">
             <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="owner_name" name="owner_name" required placeholder="Ama Mensah"
+              autocomplete="name"
               value="{{ form.get('owner_name','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              class="w-full pl-11 pr-10 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i id="ownerTick" class="hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm"></i>
           </div>
         </div>
 
@@ -127,7 +139,8 @@
           </label>
           <div class="relative mt-1">
             <i class="fas fa-phone absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
-            <input id="phone" name="phone" type="tel" placeholder="+233 24 000 0000"
+            <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+              placeholder="+233 24 000 0000"
               value="{{ form.get('phone','') }}"
               class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
@@ -140,10 +153,14 @@
           </label>
           <div class="relative mt-1">
             <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
-            <input id="email" name="email" type="email" required placeholder="owner@greenhealth.com"
+            <input id="email" name="email" type="email" required
+              inputmode="email" autocapitalize="none" spellcheck="false"
+              autocomplete="email"
+              placeholder="owner@greenhealth.com"
               value="{{ form.get('email','') }}"
-              class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              class="w-full pl-11 pr-10 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
+            <i id="emailTick" class="hidden absolute right-3 top-1/2 -translate-y-1/2 fas fa-circle-check text-emerald-500 text-sm"></i>
           </div>
         </div>
 
@@ -154,6 +171,7 @@
           <div class="relative mt-1">
             <i class="fas fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="address" name="address" placeholder="123 Health Avenue, Accra"
+              autocomplete="street-address"
               value="{{ form.get('address','') }}"
               class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
@@ -167,13 +185,32 @@
           <div class="relative mt-1">
             <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="password" name="password" type="password" required minlength="8"
-              class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
+              autocomplete="new-password"
+              class="w-full pl-11 pr-20 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
-            <button type="button"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition p-1"
-              onclick="togglePwd('password', this)">
-              <i class="fas fa-eye text-sm"></i>
-            </button>
+            <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
+              <button type="button"
+                class="text-gray-400 hover:text-primary transition p-1.5 rounded-md hover:bg-primary/5"
+                aria-label="Generate strong password" title="Generate strong password"
+                onclick="generatePwd()">
+                <i class="fas fa-wand-magic-sparkles text-sm"></i>
+              </button>
+              <button type="button"
+                class="text-gray-400 hover:text-primary transition p-1.5 rounded-md hover:bg-primary/5"
+                aria-label="Show password"
+                onclick="togglePwd('password', this)">
+                <i class="fas fa-eye text-sm"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Password strength meter -->
+          <div id="pwdStrength" class="mt-2 hidden">
+            <div class="flex gap-1 h-1">
+              <div class="flex-1 rounded-full bg-gray-200" data-bar="1"></div>
+              <div class="flex-1 rounded-full bg-gray-200" data-bar="2"></div>
+              <div class="flex-1 rounded-full bg-gray-200" data-bar="3"></div>
+            </div>
+            <p id="pwdStrengthLabel" class="text-[10px] mt-1 text-gray-400">Password strength</p>
           </div>
         </div>
 
@@ -184,10 +221,12 @@
           <div class="relative mt-1">
             <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
             <input id="confirm_password" name="confirm_password" type="password" required minlength="8"
+              autocomplete="new-password"
               class="w-full pl-11 pr-11 py-3 border border-gray-200 rounded-xl text-sm outline-none transition
                      focus:border-primary focus:ring-2 focus:ring-primary/15 hover:border-gray-300">
             <button type="button"
               class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition p-1"
+              aria-label="Show password"
               onclick="togglePwd('confirm_password', this)">
               <i class="fas fa-eye text-sm"></i>
             </button>
@@ -200,8 +239,8 @@
             <input type="checkbox" id="termsCheck" required
               class="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer">
             <span>
-              I agree to the <a href="#" class="text-primary font-medium hover:underline">Terms</a>
-              and <a href="#" class="text-primary font-medium hover:underline">Privacy Policy</a>.
+              I agree to the <a href="{{ url_for('main.landing') }}#terms" class="text-primary font-medium hover:underline">Terms</a>
+              and <a href="{{ url_for('main.landing') }}#privacy" class="text-primary font-medium hover:underline">Privacy Policy</a>.
             </span>
           </label>
 
@@ -237,7 +276,28 @@
     if (icon) icon.className = isPwd ? 'fas fa-eye-slash text-sm' : 'fas fa-eye text-sm';
   }
 
+  function generatePwd() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    var out = '';
+    for (var i = 0; i < 14; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
+    var pwd = document.getElementById('password');
+    var confirm = document.getElementById('confirm_password');
+    if (pwd) {
+      pwd.value = out;
+      pwd.type = 'text';
+      pwd.dispatchEvent(new Event('input'));
+    }
+    if (confirm) {
+      confirm.value = out;
+      confirm.type = 'text';
+      confirm.dispatchEvent(new Event('input'));
+    }
+    if (pwd) { pwd.focus(); pwd.select && pwd.select(); }
+  }
+
   (function () {
+    'use strict';
+
     var form = document.getElementById('signupForm');
     var btn = document.getElementById('signupBtn');
     var label = document.getElementById('signupBtnLabel');
@@ -245,36 +305,74 @@
     var confirm = document.getElementById('confirm_password');
     var match = document.getElementById('matchHint');
     var tierInput = document.getElementById('tierInput');
+    var termsCheck = document.getElementById('termsCheck');
+    var pharmacyInput = document.getElementById('pharmacy_name');
+    var ownerInput = document.getElementById('owner_name');
+    var emailInput = document.getElementById('email');
+    var planFeaturesText = document.getElementById('planFeaturesText');
+    var pwdStrength = document.getElementById('pwdStrength');
+    var pwdStrengthLabel = document.getElementById('pwdStrengthLabel');
     var REQUIRED_IDS = ['pharmacy_name', 'owner_name', 'email', 'password'];
 
-    /* Tier selector */
-    document.querySelectorAll('.tier-card').forEach(function (card) {
-      card.addEventListener('click', function () {
-        var tier = card.dataset.tier;
-        tierInput.value = tier;
+    /* Plan feature descriptions for the info strip */
+    var PLAN_DESCRIPTIONS = {
+      {% for key in tier_order %}
+        "{{ key }}": "{{ tiers[key].tagline }} — {% for f in tiers[key].feature_list %}{{ f|e }}{% if not loop.last %} · {% endif %}{% endfor %}",{% endfor %}
+    };
 
-        document.querySelectorAll('.tier-card').forEach(function (c) {
-          c.classList.remove('border-primary', 'ring-2', 'ring-primary/20', 'bg-primary/5');
-          c.classList.add('border-gray-200', 'bg-white');
-          var icon = c.querySelector('.fas.fa-check-circle');
-          if (icon) {
-            var slot = document.createElement('span');
-            slot.className = 'w-3 h-3 rounded-full border border-gray-300 inline-block';
-            icon.replaceWith(slot);
-          }
-        });
+    /* ---------- Tier selector ---------- */
+    function selectTier(card) {
+      var tier = card.dataset.tier;
+      tierInput.value = tier;
 
-        card.classList.remove('border-gray-200', 'bg-white');
-        card.classList.add('border-primary', 'ring-2', 'ring-primary/20', 'bg-primary/5');
-        var slot = card.querySelector('span.w-3.h-3');
-        if (slot) {
+      document.querySelectorAll('.tier-card').forEach(function (c) {
+        var selected = c === card;
+        c.classList.toggle('border-primary', selected);
+        c.classList.toggle('ring-2', selected);
+        c.classList.toggle('ring-primary/20', selected);
+        c.classList.toggle('bg-primary/5', selected);
+        c.classList.toggle('border-gray-200', !selected);
+        c.classList.toggle('bg-white', !selected);
+        c.setAttribute('aria-pressed', selected ? 'true' : 'false');
+
+        var icon = c.querySelector('.fas.fa-check-circle');
+        var slot = c.querySelector('span.w-3.h-3');
+        if (selected && slot) {
           var check = document.createElement('i');
           check.className = 'fas fa-check-circle text-primary text-xs';
           slot.replaceWith(check);
+        } else if (!selected && icon) {
+          var s = document.createElement('span');
+          s.className = 'w-3 h-3 rounded-full border border-gray-300 inline-block';
+          icon.replaceWith(s);
         }
       });
-    });
 
+      if (label) {
+        var tierName = card.querySelector('.text-xs.font-bold');
+        var text = tierName ? tierName.textContent.trim() : '';
+        label.innerHTML = '<i class="fas fa-arrow-right"></i> Continue with ' + text;
+      }
+
+      if (planFeaturesText && PLAN_DESCRIPTIONS[tier]) {
+        planFeaturesText.textContent = PLAN_DESCRIPTIONS[tier];
+      }
+    }
+
+    document.querySelectorAll('.tier-card').forEach(function (card) {
+      card.addEventListener('click', function () { selectTier(card); });
+
+      // Auto-select plan from ?tier=... query param
+    });
+    // Seed the feature strip for the initially selected plan
+    (function () {
+      var initial = document.querySelector('.tier-card[aria-pressed="true"]');
+      if (initial && planFeaturesText && PLAN_DESCRIPTIONS[initial.dataset.tier]) {
+        planFeaturesText.textContent = PLAN_DESCRIPTIONS[initial.dataset.tier];
+      }
+    })();
+
+    /* ---------- Live progress ---------- */
     function updateProgress() {
       var done = 0;
       REQUIRED_IDS.forEach(function (id) {
@@ -283,11 +381,67 @@
       });
       var fill = document.getElementById('formProgressFill');
       var txt = document.getElementById('formProgressText');
-      if (fill) fill.style.width = (done / REQUIRED_IDS.length * 100) + '%';
+      if (fill) {
+        var pct = (done / REQUIRED_IDS.length * 100);
+        fill.style.width = pct + '%';
+        fill.classList.toggle('from-emerald-500', done === REQUIRED_IDS.length);
+        fill.classList.toggle('to-emerald-400', done === REQUIRED_IDS.length);
+        fill.classList.toggle('from-primary', done !== REQUIRED_IDS.length);
+        fill.classList.toggle('to-primaryLight', done !== REQUIRED_IDS.length);
+      }
       if (txt) txt.textContent = done + ' / ' + REQUIRED_IDS.length;
+
+      // Ticks
+      toggleTick('pharmacyTick', pharmacyInput);
+      toggleTick('ownerTick', ownerInput);
+      toggleTick('emailTick', emailInput, /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/);
     }
 
+    function toggleTick(id, input, extraRe) {
+      var tick = document.getElementById(id);
+      if (!tick || !input) return;
+      var v = (input.value || '').trim();
+      var ok = !!v && (!extraRe || extraRe.test(v));
+      tick.classList.toggle('hidden', !ok);
+    }
+
+    /* ---------- Password strength ---------- */
+    function evaluateStrength(v) {
+      if (!v) return 0;
+      var score = 0;
+      if (v.length >= 8) score++;
+      if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+      if (/\d/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+      if (v.length >= 12) score++;
+      return Math.min(score, 3); // cap at 3 bars
+    }
+
+    function renderStrength() {
+      if (!pwdStrength || !pwd) return;
+      var v = pwd.value || '';
+      if (!v) { pwdStrength.classList.add('hidden'); return; }
+      pwdStrength.classList.remove('hidden');
+      var s = evaluateStrength(v);
+      var colors = {
+        0: ['bg-rose-400','bg-rose-400','bg-rose-400'],
+        1: ['bg-rose-400','bg-gray-200','bg-gray-200'],
+        2: ['bg-amber-400','bg-amber-400','bg-gray-200'],
+        3: ['bg-emerald-500','bg-emerald-500','bg-emerald-500']
+      };
+      var palette = colors[s] || colors[0];
+      pwdStrength.querySelectorAll('[data-bar]').forEach(function (bar, i) {
+        bar.className = 'flex-1 rounded-full ' + palette[i];
+      });
+      var labels = ['Very weak','Weak','Fair','Strong'];
+      var labelColors = ['text-rose-500','text-rose-500','text-amber-600','text-emerald-600'];
+      pwdStrengthLabel.textContent = labels[s] || 'Password strength';
+      pwdStrengthLabel.className = 'text-[10px] mt-1 ' + (labelColors[s] || 'text-gray-400');
+    }
+
+    /* ---------- Password match ---------- */
     function updateMatch() {
+      if (!match || !pwd || !confirm) return;
       if (!confirm.value) { match.innerHTML = ''; return; }
       if (confirm.value === pwd.value) {
         match.innerHTML = '<i class="fas fa-circle-check text-emerald-500"></i> Passwords match';
@@ -298,24 +452,64 @@
       }
     }
 
-    if (pwd) pwd.addEventListener('input', function () { updateMatch(); updateProgress(); });
+    /* ---------- Tenant preview ---------- */
+    function previewTenantCode() {
+      var el = document.getElementById('tenantPreview');
+      if (!el || !pharmacyInput) return;
+      var name = (pharmacyInput.value || '').trim();
+      if (!name) { el.textContent = ''; return; }
+      var initials = name.split(/\s+/).slice(0, 2).map(function (w) {
+        return (w[0] || '').toUpperCase();
+      }).join('');
+      el.innerHTML = '<i class="fas fa-hashtag text-primary text-[10px] mr-1"></i>' +
+        'Your tenant code will be assigned on creation ' +
+        '<span class="font-mono text-gray-700">(starts with GH-</span>' +
+        '<span class="font-mono text-gray-700">' + initials + '…)</span>';
+    }
+
+    /* ---------- Wire up ---------- */
+    if (pwd) pwd.addEventListener('input', function () {
+      updateMatch(); updateProgress(); renderStrength();
+    });
     if (confirm) confirm.addEventListener('input', updateMatch);
-    ['pharmacy_name', 'owner_name', 'email'].forEach(function (id) {
-      var el = document.getElementById(id);
+    [pharmacyInput, ownerInput, emailInput].forEach(function (el) {
       if (el) el.addEventListener('input', updateProgress);
     });
+    if (pharmacyInput) pharmacyInput.addEventListener('input', previewTenantCode);
 
-    form.addEventListener('submit', function () {
-      if (!form.checkValidity()) return;
-      btn.disabled = true;
-      label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Creating your workspace…';
-    });
+    /* ---------- Submit ---------- */
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        if (!form.checkValidity()) {
+          e.preventDefault();
+          form.reportValidity();
+          return;
+        }
+        if (termsCheck && !termsCheck.checked) {
+          e.preventDefault();
+          termsCheck.focus();
+          termsCheck.reportValidity();
+          return;
+        }
+        if (pwd.value !== confirm.value) {
+          e.preventDefault();
+          updateMatch();
+          confirm.focus();
+          return;
+        }
+        btn.disabled = true;
+        label.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Creating your workspace…';
+      });
+    }
 
+    /* ---------- Focus + initial state ---------- */
     setTimeout(function () {
-      var first = document.getElementById('pharmacy_name');
-      if (first && !first.value) first.focus();
+      if (pharmacyInput && !pharmacyInput.value) pharmacyInput.focus();
     }, 150);
+
     updateProgress();
+    previewTenantCode();
+    renderStrength();
   })();
 </script>
 {% endblock %}

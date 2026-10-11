@@ -1,7 +1,9 @@
+# app/blueprints/auth.py
 from datetime import datetime
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, current_app, session,
+    flash, current_app, session, abort,
 )
 from flask_login import login_user, logout_user, login_required, current_user
 
@@ -10,8 +12,45 @@ from models import find_user_by_email, find_tenant_by_code, find_tenant_by_id
 from utils import oid
 from app.services import tenant_service, user_service, branch_service
 
-auth_bp = Blueprint("auth", __name__)
 
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _role_endpoint(role):
+    mapping = {
+        "owner": "owner.dashboard",
+        "pharmacist": "pharmacist.dashboard",
+        "cashier": "cashier.pos",
+        "super_admin": "super_admin.dashboard",
+    }
+    return mapping.get(role, "main.landing")
+
+
+def _redirect_for_role(role):
+    return redirect(url_for(_role_endpoint(role)))
+
+
+def _safe_next(target, fallback_endpoint):
+    """Return a same-host path from `target`, or the fallback endpoint's URL.
+
+    Guards against open-redirect abuse: only relative paths starting with a
+    single "/" are accepted (so "//evil.com" and "https://evil.com" are both
+    rejected).
+    """
+    if not target:
+        return url_for(fallback_endpoint)
+    if target.startswith("/") and not target.startswith("//"):
+        return target
+    return url_for(fallback_endpoint)
+
+
+# ---------------------------------------------------------------------------
+# Login / logout
+# ---------------------------------------------------------------------------
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
@@ -38,7 +77,7 @@ def login():
             return render_template("auth/login.html", form=request.form), 403
 
         if login_type == "tenant":
-            tenant_code = (request.form.get("tenant_code") or "").strip()
+            tenant_code = (request.form.get("tenant_code") or "").strip().upper()
             if not tenant_code:
                 flash("Pharmacy code is required.", "danger")
                 return render_template("auth/login.html", form=request.form), 400
@@ -68,12 +107,18 @@ def login():
         session.permanent = True
         login_user(user, remember=False)
 
+        # Owners with an expired / pending subscription go straight to the
+        # lock page instead of bouncing through their dashboard.
         if user.role != "super_admin":
             tenant = find_tenant_by_id(user.tenant_id)
             if tenant and tenant.subscription_status != "active":
                 return redirect(url_for("main.subscription_locked"))
 
-        return _redirect_for_role(user.role)
+        # Honour ?next= when it's a safe, site-local path.
+        return redirect(_safe_next(
+            request.args.get("next"),
+            _role_endpoint(user.role),
+        ))
 
     return render_template("auth/login.html", form={})
 
@@ -86,15 +131,9 @@ def logout():
     return redirect(url_for("main.landing"))
 
 
-def _redirect_for_role(role):
-    mapping = {
-        "owner": "owner.dashboard",
-        "pharmacist": "pharmacist.dashboard",
-        "cashier": "cashier.pos",
-        "super_admin": "super_admin.dashboard",
-    }
-    return redirect(url_for(mapping.get(role, "main.landing")))
-
+# ---------------------------------------------------------------------------
+# Signup
+# ---------------------------------------------------------------------------
 
 @auth_bp.route("/signup", methods=["GET", "POST"])
 @limiter.limit("5 per hour", methods=["POST"])
@@ -177,7 +216,11 @@ def signup():
                 role="owner", tenant_id=tenant_id, phone=phone,
             )
         except ValueError as e:
-            mongo.db.tenants.delete_one({"_id": tenant_id})
+            # Roll back the tenant if the user could not be created.
+            try:
+                mongo.db.tenants.delete_one({"_id": tenant_id})
+            except Exception:
+                current_app.logger.warning("Tenant rollback failed", exc_info=True)
             flash(str(e), "danger")
             return render_template(
                 "auth/signup.html", form=form,
@@ -208,6 +251,10 @@ def signup():
     )
 
 
+# ---------------------------------------------------------------------------
+# Payment page
+# ---------------------------------------------------------------------------
+
 @auth_bp.route("/payment", methods=["GET"])
 @login_required
 def payment():
@@ -224,7 +271,6 @@ def payment():
     current_tier = tenant.tier if tenant.tier in tiers else "pro"
     pending_tier = tenant.pending_tier if tenant.pending_tier in tiers else None
 
-    # Priority: query param > pending tier > current tier
     qs_tier = (request.args.get("tier") or "").strip().lower()
     if qs_tier in tiers:
         selected_tier = qs_tier
@@ -249,3 +295,25 @@ def payment():
         is_tier_change=is_tier_change,
         paystack_public_key=current_app.config["PAYSTACK_PUBLIC_KEY"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Trailing-slash normalization
+#
+# NOTE: These routes are defined on a blueprint that already has
+# `url_prefix="/auth"`, so we must NOT include "/auth/" again in the rule.
+# "/login/" here becomes "/auth/login/" — matching the intent.
+# ---------------------------------------------------------------------------
+
+@auth_bp.route("/login/", strict_slashes=False, endpoint="login_trailing")
+def _login_trailing_slash():
+    """Normalize /auth/login/ → /auth/login (preserving query string)."""
+    args = {k: v for k, v in request.args.items()}
+    return redirect(url_for("auth.login", **args), code=301)
+
+
+@auth_bp.route("/signup/", strict_slashes=False, endpoint="signup_trailing")
+def _signup_trailing_slash():
+    """Normalize /auth/signup/ → /auth/signup (preserving query string)."""
+    args = {k: v for k, v in request.args.items()}
+    return redirect(url_for("auth.signup", **args), code=301)

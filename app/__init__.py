@@ -1,6 +1,7 @@
+# app/__init__.py
 import os
 from datetime import datetime
-from flask import Flask, request, g, send_from_directory
+from flask import Flask, request, g, send_from_directory, redirect, url_for
 from flask_login import current_user
 
 from config import get_config
@@ -31,7 +32,7 @@ def create_app(config_class=None):
     limiter.init_app(app)
 
     register_jinja(app)
-    
+
     from app.services import entitlement_service
     entitlement_service.register_jinja(app)
 
@@ -49,6 +50,31 @@ def create_app(config_class=None):
     @app.route("/uploads/<path:filename>")
     def uploaded_file(filename):
         return send_from_directory(uploads, filename)
+
+    # ------------------------------------------------------------------
+    # LEGACY URL REDIRECTS
+    #
+    # The `auth` blueprint was moved under the /auth/* prefix so that URLs
+    # match their semantic owner (auth.login, auth.signup, ...). Any old
+    # bookmarks, external links, sitemap entries or robots.txt rules that
+    # point at the root-level versions get a permanent 301 redirect to the
+    # canonical location. Query strings (e.g. ?tier=business) are preserved.
+    # ------------------------------------------------------------------
+    @app.route("/login", methods=["GET", "POST"])
+    def _legacy_login():
+        return redirect(url_for("auth.login", **request.args.to_dict()), code=301)
+
+    @app.route("/signup", methods=["GET", "POST"])
+    def _legacy_signup():
+        return redirect(url_for("auth.signup", **request.args.to_dict()), code=301)
+
+    @app.route("/logout", methods=["GET"])
+    def _legacy_logout():
+        return redirect(url_for("auth.logout", **request.args.to_dict()), code=301)
+
+    @app.route("/payment", methods=["GET"])
+    def _legacy_payment():
+        return redirect(url_for("auth.payment", **request.args.to_dict()), code=301)
 
     # ------------------------------------------------------------------
     # Blueprints — register each one individually so a failure is obvious
@@ -79,8 +105,8 @@ def create_app(config_class=None):
     _reg(cashier_bp, "cashier")
     _reg(super_admin_bp, "super_admin")
 
-    # API + PWA are optional-ish: if the api submodule is broken, we want
-    # the rest of the app to keep working, so we log loudly but continue.
+    # API + PWA are optional-ish: if a submodule is broken, the rest of the
+    # app keeps working — log loudly but continue.
     try:
         from app.blueprints.api import api_bp
         _reg(api_bp, "api")

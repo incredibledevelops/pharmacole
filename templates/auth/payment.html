@@ -16,6 +16,7 @@
 
     <div class="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-gray-100">
 
+      <!-- Progress -->
       <div class="flex items-center justify-center gap-2 mb-6" aria-label="Signup progress">
         <div class="flex items-center gap-2 opacity-50">
           <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold flex items-center justify-center">
@@ -35,6 +36,7 @@
         </div>
       </div>
 
+      <!-- Hero -->
       <div class="text-center mb-6">
         <div class="relative w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
           <i class="fas fa-credit-card text-primary text-2xl"></i>
@@ -76,6 +78,7 @@
       </div>
       {% endif %}
 
+      <!-- Plan picker -->
       <div class="mb-6">
         <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 text-center">
           Choose your plan
@@ -93,7 +96,8 @@
               data-tier="{{ key }}"
               data-amount="{{ t.amount }}"
               role="radio"
-              aria-checked="{{ 'true' if key == selected_tier else 'false' }}">
+              aria-checked="{{ 'true' if key == selected_tier else 'false' }}"
+              title="{{ t.tagline }}">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs font-bold text-gray-800">{{ t.label }}</span>
                 {% if key == selected_tier %}
@@ -116,6 +120,7 @@
         </div>
       </div>
 
+      <!-- Summary block -->
       <div class="bg-gradient-to-br from-gray-50 to-teal-50/40 rounded-2xl p-5 mb-5 border border-gray-100">
         <div class="flex justify-between text-sm mb-2.5">
           <span class="text-gray-500 inline-flex items-center gap-1.5"><i class="fas fa-crown text-accent text-xs"></i> Plan</span>
@@ -138,6 +143,7 @@
         </div>
       </div>
 
+      <!-- Payment methods strip -->
       <div class="mb-5">
         <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-2 text-center">
           Payment methods accepted
@@ -158,6 +164,7 @@
         </div>
       </div>
 
+      <!-- Pay button -->
       <button id="payBtn" type="button" aria-busy="false"
         class="btn-primary w-full bg-primary hover:bg-primaryLight disabled:opacity-60 disabled:cursor-not-allowed
                text-white font-bold py-4 rounded-xl shadow-md
@@ -174,11 +181,13 @@
         Secure HTTPS session · Token valid for 15 minutes
       </p>
 
+      <!-- Payment timer -->
       <div id="payTimer" class="hidden mt-3 text-[11px] text-gray-500 text-center inline-flex w-full items-center justify-center gap-1.5">
         <i class="fas fa-clock text-primary"></i>
         <span>Waiting for payment… <span id="payTimerSeconds" class="font-mono font-semibold text-gray-700">0s</span></span>
       </div>
 
+      <!-- Error area -->
       <div id="payError" role="alert" aria-live="polite"
         class="hidden mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-3 items-start gap-2">
         <i class="fas fa-exclamation-circle mt-0.5"></i>
@@ -193,6 +202,17 @@
         </button>
       </div>
 
+      <!-- Success toast (hidden until verified) -->
+      <div id="paySuccess" role="status" aria-live="polite"
+        class="hidden mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl p-3 items-center gap-2">
+        <i class="fas fa-circle-check"></i>
+        <span>Payment verified. Redirecting…</span>
+      </div>
+
+      <!-- Slot for the "Already paid? Refresh status" button -->
+      <div id="refreshStatusSlot" class="text-center mt-3"></div>
+
+      <!-- Trust row -->
       <div class="flex items-center justify-center gap-4 mt-5 text-[11px] text-gray-400 flex-wrap">
         <span class="inline-flex items-center gap-1"><i class="fas fa-shield-alt text-emerald-500"></i> Paystack secured</span>
         <span class="inline-flex items-center gap-1"><i class="fas fa-ban text-primary"></i> No auto-charge</span>
@@ -219,7 +239,7 @@
       </p>
 
       <div class="text-center mt-5">
-        <a href="{{ url_for('main.redirect_dashboard') }}"
+        <a href="{{ request.args.get('next') or url_for('main.redirect_dashboard') }}"
           class="text-xs text-gray-500 hover:text-primary transition inline-flex items-center gap-1">
           <i class="fas fa-arrow-left text-[10px]"></i> Back to dashboard
         </a>
@@ -234,6 +254,7 @@
 
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
+
 <script>
   window.PHARMACOLE_PAYMENT = {
     initUrl: "{{ url_for('payments.initialize') }}",
@@ -247,23 +268,58 @@
     csrfToken: "{{ csrf_token() }}"
   };
 </script>
+
 <script>
   (function () {
+    'use strict';
+
     var cfg = window.PHARMACOLE_PAYMENT || {};
     var btn = document.getElementById('payBtn');
     var label = document.getElementById('payBtnLabel');
     var errBox = document.getElementById('payError');
     var errMsg = document.getElementById('payErrorMsg');
     var errHint = document.getElementById('payErrorHint');
+    var okBox = document.getElementById('paySuccess');
     var timerBox = document.getElementById('payTimer');
     var timerSeconds = document.getElementById('payTimerSeconds');
     var copyBtn = document.getElementById('copyTenantBtn');
     var summaryPlan = document.getElementById('summaryPlan');
     var summaryTotal = document.getElementById('summaryTotal');
+    var refreshSlot = document.getElementById('refreshStatusSlot');
 
+    var REF_KEY = 'pharmacole_last_reference';
+    var TIER_KEY = 'pharmacole_selected_tier';
     var timerInterval = null;
     var timerStart = 0;
 
+    /* ---------- Session storage helpers ---------- */
+    function rememberReference(ref) {
+      try { if (ref) sessionStorage.setItem(REF_KEY, ref); } catch (e) {}
+    }
+    function readReference() {
+      try { return sessionStorage.getItem(REF_KEY); } catch (e) { return null; }
+    }
+    function forgetReference() {
+      try { sessionStorage.removeItem(REF_KEY); } catch (e) {}
+    }
+
+    /* ---------- Tier persistence ---------- */
+    function rememberTier(tier) {
+      try { sessionStorage.setItem(TIER_KEY, tier); } catch (e) {}
+    }
+    function readTier() {
+      try { return sessionStorage.getItem(TIER_KEY); } catch (e) { return null; }
+    }
+
+    /* Restore the last-used tier (only if it differs from server-side default) */
+    (function () {
+      var saved = readTier();
+      if (!saved || saved === cfg.tier) return;
+      var card = document.querySelector('.tier-card[data-tier="' + saved + '"]');
+      if (card) card.click();
+    })();
+
+    /* ---------- Tier selection ---------- */
     document.querySelectorAll('.tier-card').forEach(function (card) {
       card.addEventListener('click', function () {
         var tier = card.dataset.tier;
@@ -293,26 +349,41 @@
 
         cfg.tier = tier;
         cfg.amount = amount;
+        rememberTier(tier);
 
         var planName = card.querySelector('.text-xs.font-bold');
         if (summaryPlan && planName) summaryPlan.textContent = planName.textContent + ' · Monthly';
-        if (summaryTotal) summaryTotal.textContent = 'GH₵ ' + amount.toFixed(2);
+        if (summaryTotal) {
+          summaryTotal.textContent = 'GH₵ ' + amount.toFixed(2);
+          // Soft pulse on amount change
+          summaryTotal.style.transition = 'color 0.3s ease';
+          summaryTotal.style.color = '#14b8a6';
+          setTimeout(function () { summaryTotal.style.color = ''; }, 500);
+        }
         if (label) label.innerHTML = 'Pay GH₵ ' + amount.toFixed(2) + ' with Paystack';
       });
     });
 
+    /* ---------- Error / success / loading / timer ---------- */
     function showError(msg, hint) {
       if (!errBox || !errMsg) return;
       errMsg.textContent = msg;
       if (errHint) errHint.textContent = hint || '';
       errBox.classList.remove('hidden');
       errBox.classList.add('flex');
-      errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (okBox) { okBox.classList.add('hidden'); okBox.classList.remove('flex'); }
+      try { errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
     }
     function hideError() {
       if (!errBox) return;
       errBox.classList.add('hidden');
       errBox.classList.remove('flex');
+    }
+    function showSuccess() {
+      if (!okBox) return;
+      hideError();
+      okBox.classList.remove('hidden');
+      okBox.classList.add('flex');
     }
 
     function setLoading(on, text) {
@@ -345,6 +416,17 @@
       if (timerBox) { timerBox.classList.add('hidden'); timerBox.classList.remove('inline-flex'); }
     }
 
+    /* ---------- Copy tenant code ---------- */
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+    }
     if (copyBtn) {
       copyBtn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -352,62 +434,139 @@
         if (!text) return;
         function done() {
           var icon = copyBtn.querySelector('i');
-          if (icon) { icon.className = 'fas fa-check text-[10px] text-emerald-500';
-            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400); }
+          if (icon) {
+            icon.className = 'fas fa-check text-[10px] text-emerald-500';
+            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400);
+          }
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
-        } else { fallbackCopy(text); done(); }
+        } else {
+          fallbackCopy(text); done();
+        }
       });
     }
-    function fallbackCopy(text) {
-      var ta = document.createElement('textarea'); ta.value = text;
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(ta);
-    }
 
-    if (typeof window.initPaymentPage === 'function') {
-      window.initPaymentPage(cfg);
-    } else {
-      btn.addEventListener('click', function () {
-        hideError(); setLoading(true, 'Initializing...');
-        fetch(cfg.initUrl, {
+    /* ---------- "Already paid? Refresh status" ---------- */
+    function renderRefreshButton() {
+      if (!refreshSlot) return;
+      var lastRef = readReference();
+      if (!lastRef) { refreshSlot.innerHTML = ''; return; }
+
+      var refreshLink = document.createElement('button');
+      refreshLink.type = 'button';
+      refreshLink.className = 'text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1';
+      refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
+
+      refreshLink.addEventListener('click', function () {
+        refreshLink.disabled = true;
+        refreshLink.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Checking…';
+
+        fetch(cfg.verifyUrl + '?reference=' + encodeURIComponent(lastRef), {
           method: 'POST',
           credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRFToken': cfg.csrfToken,
-          },
-          body: JSON.stringify({ tier: cfg.tier }),
+          headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken },
         })
-        .then(function (r) { return r.json(); })
+          .then(function (r) { return r.json(); })
+          .then(function (v) {
+            if (v && v.ok) {
+              forgetReference();
+              showSuccess();
+              setTimeout(function () { window.location.href = cfg.dashUrl; }, 800);
+            } else {
+              refreshLink.disabled = false;
+              refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
+              showError((v && v.error) || 'No successful payment found yet.');
+            }
+          })
+          .catch(function () {
+            refreshLink.disabled = false;
+            refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
+            showError('Network error while checking payment status.');
+          });
+      });
+
+      refreshSlot.innerHTML = '';
+      refreshSlot.appendChild(refreshLink);
+    }
+    renderRefreshButton();
+
+    /* ---------- Payment init ---------- */
+    function initializeAndPay() {
+      hideError();
+      setLoading(true, 'Initializing...');
+
+      fetch(cfg.initUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': cfg.csrfToken,
+        },
+        body: JSON.stringify({ tier: cfg.tier }),
+      })
+        .then(function (r) {
+          var ct = r.headers.get('content-type') || '';
+          if (ct.indexOf('application/json') === -1) {
+            throw new Error('Unexpected server response. Please try again.');
+          }
+          return r.json().then(function (data) {
+            if (!r.ok || data.error) throw new Error(data.error || 'Could not initialize payment.');
+            return data;
+          });
+        })
         .then(function (data) {
-          if (data.error) throw new Error(data.error);
-          if (!data.access_code) throw new Error('No access code from server.');
+          if (!data.reference && !data.access_code && !data.authorization_url) {
+            throw new Error('Payment provider did not return a valid response.');
+          }
+          if (data.reference) rememberReference(data.reference);
+
           setLoading(false);
+
+          var amountToCharge = data.amount || cfg.amount;
+
           var handler = PaystackPop.setup({
             key: cfg.publicKey,
             email: cfg.email,
-            amount: Math.round((data.amount || cfg.amount) * 100),
+            amount: Math.round(amountToCharge * 100),
             currency: 'GHS',
             ref: data.reference,
+            metadata: {
+              tenant_code: cfg.tenantCode,
+              tier: data.tier || cfg.tier,
+              custom_fields: [
+                { display_name: 'Tenant', variable_name: 'tenant_code', value: cfg.tenantCode },
+                { display_name: 'Tier', variable_name: 'tier', value: data.tier || cfg.tier },
+              ],
+            },
             callback: function (response) {
               setLoading(true, 'Verifying payment...');
               fetch(cfg.verifyUrl + '?reference=' + encodeURIComponent(response.reference), {
-                method: 'POST', credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken }
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken },
               })
-              .then(function (r) { return r.json(); })
-              .then(function (v) {
-                if (v.ok) window.location.href = cfg.dashUrl;
-                else { showError(v.error || 'Verification failed.'); setLoading(false); }
-              })
-              .catch(function () { showError('Could not verify.'); setLoading(false); });
+                .then(function (r) { return r.json(); })
+                .then(function (v) {
+                  if (v && v.ok) {
+                    forgetReference();
+                    showSuccess();
+                    setTimeout(function () { window.location.href = cfg.dashUrl; }, 800);
+                  } else {
+                    showError((v && v.error) || 'Verification failed. Contact support if you were charged.');
+                    setLoading(false);
+                  }
+                })
+                .catch(function () {
+                  showError('Could not verify payment. Contact support if you were charged.');
+                  setLoading(false);
+                });
             },
-            onClose: function () { setLoading(false); }
+            onClose: function () {
+              setLoading(false);
+              renderRefreshButton();
+            },
           });
           handler.openIframe();
         })
@@ -415,7 +574,17 @@
           showError(err.message || 'Could not initialize payment.');
           setLoading(false);
         });
-      });
+    }
+
+    if (btn) {
+      if (typeof window.initPaymentPage === 'function') {
+        window.initPaymentPage(cfg);
+        btn.addEventListener('click', function () {
+          setTimeout(renderRefreshButton, 800);
+        });
+      } else {
+        btn.addEventListener('click', initializeAndPay);
+      }
     }
   })();
 </script>

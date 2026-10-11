@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Public marketing / auth pages
+Disallow: /owner/
+Disallow: /pharmacist/
+Disallow: /cashier/
+Disallow: /super-admin/
+Disallow: /auth/payment
+Disallow: /payments/
+Disallow: /healthz
+
+# Let crawlers index the landing page, signup, and login
+Allow: /auth/login
+Allow: /auth/signup
+
+Sitemap: https://pharmacole.kwiqbuy.com/sitemap.xml
