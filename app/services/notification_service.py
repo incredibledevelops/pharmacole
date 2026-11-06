@@ -1,6 +1,14 @@
-import smtplib
-import ssl
-from email.message import EmailMessage
+"""
+Notification service.
+
+Email   → Resend   (https://resend.com/docs/api-reference/emails/send-email)
+SMS     → Arkesel  (https://sms.arkesel.com/api/v2/sms/send)
+
+Both providers are optional: if the API key is not configured, the
+corresponding send function raises RuntimeError, which the caller
+already handles (returns 502 to the client). Web push is unchanged.
+"""
+import json
 from datetime import datetime
 
 import requests
@@ -11,37 +19,59 @@ from utils import oid
 
 
 # ---------------------------------------------------------------------------
-# Email
+# Email — Resend
 # ---------------------------------------------------------------------------
 
 def send_email(to_email, subject, body_text, body_html=None, attachments=None):
+    """
+    Send an email via Resend.
+
+    attachments: list of (filename, mimetype, bytes) tuples.
+    Resend expects attachments as [{filename, content}], where `content`
+    is a base64-encoded string.
+    """
     cfg = current_app.config
-    if not cfg.get("SMTP_HOST") or not cfg.get("SMTP_USER"):
-        raise RuntimeError("SMTP not configured")
+    api_key = cfg.get("RESEND_API_KEY")
+    if not api_key:
+        raise RuntimeError("Resend is not configured (RESEND_API_KEY missing)")
 
-    msg = EmailMessage()
-    msg["From"] = cfg["SMTP_FROM"]
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.set_content(body_text)
-    if body_html:
-        msg.add_alternative(body_html, subtype="html")
+    payload = {
+        "from": cfg["RESEND_FROM_EMAIL"],
+        "to": [to_email],
+        "subject": subject,
+        "html": body_html or body_text,
+        "text": body_text,
+    }
 
-    for filename, mimetype, data in (attachments or []):
-        maintype, _, subtype = mimetype.partition("/")
-        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+    if attachments:
+        import base64
+        payload["attachments"] = [
+            {
+                "filename": filename,
+                "content": base64.b64encode(data).decode("ascii"),
+                # Resend infers content_type from filename; explicit is fine.
+                "content_type": mimetype,
+            }
+            for filename, mimetype, data in attachments
+        ]
 
-    ctx = ssl.create_default_context()
-    if cfg["SMTP_USE_TLS"]:
-        with smtplib.SMTP(cfg["SMTP_HOST"], cfg["SMTP_PORT"]) as s:
-            s.starttls(context=ctx)
-            s.login(cfg["SMTP_USER"], cfg["SMTP_PASS"])
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP_SSL(cfg["SMTP_HOST"], cfg["SMTP_PORT"], context=ctx) as s:
-            s.login(cfg["SMTP_USER"], cfg["SMTP_PASS"])
-            s.send_message(msg)
-    return True
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        raise RuntimeError(f"Network error contacting Resend: {e}")
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"Resend error {r.status_code}: {r.text[:300]}")
+
+    return r.json()
 
 
 def email_receipt(to_email, tenant, sale, pdf_bytes=None):
@@ -64,79 +94,94 @@ def email_receipt(to_email, tenant, sale, pdf_bytes=None):
 
 
 # ---------------------------------------------------------------------------
-# WhatsApp Cloud API
+# SMS — Arkesel
 # ---------------------------------------------------------------------------
 
-def _wa_headers():
+def _arkesel_headers():
     cfg = current_app.config
     return {
-        "Authorization": f"Bearer {cfg['WHATSAPP_TOKEN']}",
+        "api-key": cfg["ARKESEL_API_KEY"],
         "Content-Type": "application/json",
     }
 
 
-def send_whatsapp_text(to_phone, message):
+def send_sms(to_phone, message):
+    """
+    Send an SMS via Arkesel.
+
+    Arkesel's v2 API expects recipients as an array of phone numbers
+    in E.164-ish format. We normalize Ghanaian local numbers (0XXXXXXXXX)
+    to 233XXXXXXXXX.
+    """
     cfg = current_app.config
-    if not cfg.get("WHATSAPP_TOKEN") or not cfg.get("WHATSAPP_PHONE_ID"):
-        raise RuntimeError("WhatsApp not configured")
+    if not cfg.get("ARKESEL_API_KEY"):
+        raise RuntimeError("Arkesel is not configured (ARKESEL_API_KEY missing)")
 
-    url = f"{cfg['WHATSAPP_API_URL']}/{cfg['WHATSAPP_PHONE_ID']}/messages"
+    recipient = _normalize_phone(to_phone)
+    if not recipient:
+        raise RuntimeError(f"Invalid phone number: {to_phone!r}")
+
     payload = {
-        "messaging_product": "whatsapp",
-        "to": _normalize_phone(to_phone),
-        "type": "text",
-        "text": {"body": message},
+        "sender": cfg["ARKESEL_SENDER_ID"],
+        "message": message,
+        "recipients": [recipient],
     }
-    r = requests.post(url, json=payload, headers=_wa_headers(), timeout=15)
+
+    try:
+        r = requests.post(
+            f"{cfg['ARKESEL_BASE_URL']}/sms/send",
+            json=payload,
+            headers=_arkesel_headers(),
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        raise RuntimeError(f"Network error contacting Arkesel: {e}")
+
     if r.status_code >= 400:
-        raise RuntimeError(f"WhatsApp error {r.status_code}: {r.text[:200]}")
-    return r.json()
+        raise RuntimeError(f"Arkesel error {r.status_code}: {r.text[:300]}")
+
+    try:
+        data = r.json()
+    except ValueError:
+        data = {}
+
+    # Arkesel returns {"status": "success", "data": {"id": "...", ...}}
+    # or {"status": "error", "message": "..."}
+    if str(data.get("status", "")).lower() != "success":
+        raise RuntimeError(data.get("message") or "Arkesel rejected the message")
+
+    return data
 
 
-def send_whatsapp_document(to_phone, pdf_url_or_id, filename, caption=None):
-    cfg = current_app.config
-    if not cfg.get("WHATSAPP_TOKEN") or not cfg.get("WHATSAPP_PHONE_ID"):
-        raise RuntimeError("WhatsApp not configured")
-
-    url = f"{cfg['WHATSAPP_API_URL']}/{cfg['WHATSAPP_PHONE_ID']}/messages"
-    doc = {"link": pdf_url_or_id, "filename": filename}
-    if caption:
-        doc["caption"] = caption
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": _normalize_phone(to_phone),
-        "type": "document",
-        "document": doc,
-    }
-    r = requests.post(url, json=payload, headers=_wa_headers(), timeout=20)
-    if r.status_code >= 400:
-        raise RuntimeError(f"WhatsApp error {r.status_code}: {r.text[:200]}")
-    return r.json()
-
-
-def whatsapp_receipt(to_phone, tenant, sale):
+def sms_receipt(to_phone, tenant, sale):
+    """Send a compact receipt summary by SMS."""
     summary = (
-        f"*{tenant.pharmacy_name}*\n"
+        f"{tenant.pharmacy_name}\n"
         f"Receipt: {sale.get('receipt_no')}\n"
         f"Total: GH₵ {sale.get('total_amount'):.2f}\n"
-        f"Paid via: {sale.get('payment_method','').upper()}\n"
+        f"Paid via: {sale.get('payment_method', '').upper()}\n"
         f"Thank you!"
     )
-    return send_whatsapp_text(to_phone, summary)
+    return send_sms(to_phone, summary)
 
 
 def _normalize_phone(p):
-    """Turn 024xxxxxxx into 23324xxxxxxx for WhatsApp."""
+    """
+    Turn 024xxxxxxx into 23324xxxxxxx for Arkesel.
+    Also accepts +233… and bare 233… numbers.
+    """
     digits = "".join(ch for ch in str(p or "") if ch.isdigit())
-    if digits.startswith("0") and len(digits) == 10:
-        return "233" + digits[1:]
+    if not digits:
+        return None
     if digits.startswith("233"):
         return digits
+    if digits.startswith("0") and len(digits) == 10:
+        return "233" + digits[1:]
     return digits
 
 
 # ---------------------------------------------------------------------------
-# Web Push (VAPID)
+# Web Push (VAPID) — unchanged
 # ---------------------------------------------------------------------------
 
 def _webpush(subscription_info, payload: dict):
@@ -145,7 +190,7 @@ def _webpush(subscription_info, payload: dict):
     try:
         webpush(
             subscription_info=subscription_info,
-            data=__import__("json").dumps(payload),
+            data=json.dumps(payload),
             vapid_private_key=cfg["VAPID_PRIVATE_KEY"],
             vapid_claims={"sub": cfg["VAPID_SUBJECT"]},
         )
@@ -169,7 +214,6 @@ def push_to_user(tenant_id, user_id, title, body, url=None):
         if ok:
             count += 1
         else:
-            # prune dead subscription
             mongo.db.push_subscriptions.delete_one({"_id": s["_id"]})
     return count
 

@@ -48,6 +48,14 @@ def _safe_next(target, fallback_endpoint):
     return url_for(fallback_endpoint)
 
 
+def _wants_remember():
+    """Read the 'remember me' checkbox from the form. Default: False."""
+    v = request.form.get("remember")
+    if v is None:
+        return False
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
 # ---------------------------------------------------------------------------
 # Login / logout
 # ---------------------------------------------------------------------------
@@ -59,7 +67,6 @@ def login():
         return _redirect_for_role(current_user.role)
 
     if request.method == "POST":
-        login_type = (request.form.get("login_type") or "tenant").strip()
         email = (request.form.get("email") or "").lower().strip()
         password = request.form.get("password") or ""
 
@@ -73,48 +80,25 @@ def login():
             return render_template("auth/login.html", form=request.form), 401
 
         if not user.is_active:
-            flash("This account has been deactivated.", "warning")
+            flash("This account has been deactivated. Contact your pharmacy owner.", "warning")
             return render_template("auth/login.html", form=request.form), 403
 
-        if login_type == "tenant":
-            tenant_code = (request.form.get("tenant_code") or "").strip().upper()
-            if not tenant_code:
-                flash("Pharmacy code is required.", "danger")
-                return render_template("auth/login.html", form=request.form), 400
-
-            tenant = find_tenant_by_code(tenant_code)
-            if not tenant:
-                flash("No pharmacy found with that code.", "danger")
-                return render_template("auth/login.html", form=request.form), 404
-
-            if user.role == "super_admin":
-                flash("Super admins must sign in via the Super Admin tab.", "danger")
-                return render_template("auth/login.html", form=request.form), 403
-
-            if str(user.tenant_id) != str(tenant._id):
-                flash("This account does not belong to that pharmacy.", "danger")
-                return render_template("auth/login.html", form=request.form), 403
-
-        elif login_type == "super":
-            if user.role != "super_admin":
-                flash("You are not a super admin.", "danger")
-                return render_template("auth/login.html", form=request.form), 403
-
-        else:
-            flash("Invalid login type.", "danger")
-            return render_template("auth/login.html", form=request.form), 400
-
+        # Session cookie hygiene.
         session.permanent = True
-        login_user(user, remember=False)
 
-        # Owners with an expired / pending subscription go straight to the
-        # lock page instead of bouncing through their dashboard.
-        if user.role != "super_admin":
+        # Honour the "Keep me signed in on this device" checkbox.
+        remember = _wants_remember()
+        login_user(user, remember=remember)
+
+        # Non-super-admin users whose tenant subscription has lapsed go
+        # straight to the lock page instead of their dashboard.
+        if user.role != "super_admin" and user.tenant_id:
             tenant = find_tenant_by_id(user.tenant_id)
             if tenant and tenant.subscription_status != "active":
                 return redirect(url_for("main.subscription_locked"))
 
-        # Honour ?next= when it's a safe, site-local path.
+        # Send the user to their role's home page. ?next= is honoured only
+        # when it's a safe, same-origin relative path.
         return redirect(_safe_next(
             request.args.get("next"),
             _role_endpoint(user.role),
@@ -132,7 +116,7 @@ def logout():
 
 
 # ---------------------------------------------------------------------------
-# Signup
+# Signup (unchanged)
 # ---------------------------------------------------------------------------
 
 @auth_bp.route("/signup", methods=["GET", "POST"])
@@ -216,7 +200,6 @@ def signup():
                 role="owner", tenant_id=tenant_id, phone=phone,
             )
         except ValueError as e:
-            # Roll back the tenant if the user could not be created.
             try:
                 mongo.db.tenants.delete_one({"_id": tenant_id})
             except Exception:
@@ -252,7 +235,7 @@ def signup():
 
 
 # ---------------------------------------------------------------------------
-# Payment page
+# Payment page (unchanged)
 # ---------------------------------------------------------------------------
 
 @auth_bp.route("/payment", methods=["GET"])
@@ -298,22 +281,16 @@ def payment():
 
 
 # ---------------------------------------------------------------------------
-# Trailing-slash normalization
-#
-# NOTE: These routes are defined on a blueprint that already has
-# `url_prefix="/auth"`, so we must NOT include "/auth/" again in the rule.
-# "/login/" here becomes "/auth/login/" — matching the intent.
+# Trailing-slash normalization (unchanged)
 # ---------------------------------------------------------------------------
 
 @auth_bp.route("/login/", strict_slashes=False, endpoint="login_trailing")
 def _login_trailing_slash():
-    """Normalize /auth/login/ → /auth/login (preserving query string)."""
     args = {k: v for k, v in request.args.items()}
     return redirect(url_for("auth.login", **args), code=301)
 
 
 @auth_bp.route("/signup/", strict_slashes=False, endpoint="signup_trailing")
 def _signup_trailing_slash():
-    """Normalize /auth/signup/ → /auth/signup (preserving query string)."""
     args = {k: v for k, v in request.args.items()}
     return redirect(url_for("auth.signup", **args), code=301)

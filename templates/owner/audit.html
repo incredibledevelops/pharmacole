@@ -14,94 +14,169 @@
 </header>
 
 <main class="flex-1 overflow-y-auto p-4 md:p-6">
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
-    <input id="auditSearch" placeholder="Search action, target, meta…" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
-    <select id="auditAction" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
-      <option value="">All actions</option>
-    </select>
-    <input id="auditFrom" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
-    <input id="auditTo" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
-    <button id="auditApply" class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold">Apply</button>
+  <div id="auditGate" class="hidden mb-5 rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-amber-100/40 border border-amber-200 flex items-start gap-3">
+    <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+      <i class="fas fa-lock"></i>
+    </span>
+    <div class="min-w-0">
+      <p class="font-bold text-gray-800">Audit log is not included in your plan</p>
+      <p class="text-sm text-gray-600 mt-0.5">Upgrade to Pro or higher to unlock searchable audit history.</p>
+      <a href="{{ url_for('owner.subscription') }}" class="mt-2 inline-flex items-center gap-2 bg-primary hover:bg-primaryLight text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+        <i class="fas fa-arrow-up"></i> View plans
+      </a>
+    </div>
   </div>
 
-  <div id="auditList" class="space-y-2">
-    <p class="text-sm text-gray-400 text-center py-10">Loading…</p>
+  <div id="auditPanel" class="hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-5 flex flex-col sm:flex-row gap-3">
+      <input id="auditSearch" placeholder="Search action, target, meta…" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm">
+      <select id="auditAction" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
+        <option value="">All actions</option>
+      </select>
+      <input id="auditFrom" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+      <input id="auditTo" type="date" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+      <button id="auditApply" class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold">Apply</button>
+    </div>
+
+    <div id="auditList" class="space-y-2">
+      <p class="text-sm text-gray-400 text-center py-10">Loading…</p>
+    </div>
+  </div>
+
+  <div id="auditError" class="hidden bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl p-4">
+    <p class="font-medium">Could not load audit log</p>
+    <p id="auditErrorMsg" class="text-xs mt-1"></p>
   </div>
 </main>
 
 <script>
-const API_BASE = '{{ url_for("api.me") }}'.replace('/auth/me', '');
-let API_TOKEN = localStorage.getItem('pharmacole_api_token') || '';
+(function () {
+  'use strict';
 
-async function ensureToken() {
-  if (API_TOKEN) return API_TOKEN;
-  // mint a short-lived session token via a helper endpoint (added below in main.py)
-  const r = await fetch('/api/session-token', { credentials: 'same-origin' });
-  const j = await r.json();
-  API_TOKEN = j.access;
-  localStorage.setItem('pharmacole_api_token', API_TOKEN);
-  return API_TOKEN;
-}
+  const TOKEN_KEY = 'pharmacole_api_token';
+  const BASE_KEY  = 'pharmacole_api_base';
 
-async function loadActions() {
-  const t = await ensureToken();
-  const r = await fetch(`${API_BASE}/audit/actions`, {
-    headers: { Authorization: `Bearer ${t}` }
-  });
-  const j = await r.json();
-  const sel = document.getElementById('auditAction');
-  (j.actions || []).forEach(a => {
-    const o = document.createElement('option'); o.value = a; o.textContent = a;
-    sel.appendChild(o);
-  });
-}
+  const gate    = document.getElementById('auditGate');
+  const panel   = document.getElementById('auditPanel');
+  const errBox  = document.getElementById('auditError');
+  const errMsg  = document.getElementById('auditErrorMsg');
+  const listEl  = document.getElementById('auditList');
+  const applyEl = document.getElementById('auditApply');
 
-async function loadList() {
-  const t = await ensureToken();
-  const q = new URLSearchParams();
-  const search = document.getElementById('auditSearch').value.trim();
-  const action = document.getElementById('auditAction').value;
-  const from = document.getElementById('auditFrom').value;
-  const to = document.getElementById('auditTo').value;
-  if (search) q.set('q', search);
-  if (action) q.set('action', action);
-  if (from) q.set('from', from);
-  if (to) q.set('to', to);
+  let apiBase = localStorage.getItem(BASE_KEY) || '/api/v1';
 
-  const r = await fetch(`${API_BASE}/audit?${q}`, {
-    headers: { Authorization: `Bearer ${t}` }
-  });
-  const j = await r.json();
-  const el = document.getElementById('auditList');
-  if (!j.items || !j.items.length) {
-    el.innerHTML = '<p class="text-sm text-gray-400 text-center py-10">No audit entries match.</p>';
-    return;
+  async function sessionToken() {
+    // Always mint a fresh one — short-lived and avoids stale-token bugs.
+    const r = await fetch('/api/session-token', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('Could not mint session token (' + r.status + ')');
+    const j = await r.json();
+    if (!j.access) throw new Error('Session token missing');
+    return j.access;
   }
-  el.innerHTML = j.items.map(it => `
-    <div class="bg-white rounded-xl border border-gray-100 p-4">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">${it.action}</span>
-            ${it.target ? `<span class="text-xs text-gray-500 font-mono">${it.target}</span>` : ''}
+
+  async function bootstrap() {
+    try {
+      const token = await sessionToken();
+      const r = await fetch(`${apiBase}/me`, { headers: { Authorization: `Bearer ${token}` } });
+
+      if (r.status === 402) {
+        // API access is a tier feature — show upgrade gate, not an error.
+        gate.classList.remove('hidden');
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+
+      const me = await r.json();
+      apiBase = me.api_base || apiBase;
+      localStorage.setItem(BASE_KEY, apiBase);
+      localStorage.setItem(TOKEN_KEY, token);
+
+      panel.classList.remove('hidden');
+      await loadActions(token);
+      await loadList(token);
+    } catch (e) {
+      errBox.classList.remove('hidden');
+      errMsg.textContent = e.message || String(e);
+    }
+  }
+
+  async function loadActions(token) {
+    const r = await fetch(`${apiBase}/audit/actions`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return;
+    const j = await r.json();
+    const sel = document.getElementById('auditAction');
+    (j.actions || []).forEach(a => {
+      const o = document.createElement('option');
+      o.value = a; o.textContent = a;
+      sel.appendChild(o);
+    });
+  }
+
+  async function loadList(token) {
+    const q = new URLSearchParams();
+    const search = document.getElementById('auditSearch').value.trim();
+    const action = document.getElementById('auditAction').value;
+    const from   = document.getElementById('auditFrom').value;
+    const to     = document.getElementById('auditTo').value;
+    if (search) q.set('q', search);
+    if (action) q.set('action', action);
+    if (from)   q.set('from', from);
+    if (to)     q.set('to', to);
+
+    const r = await fetch(`${apiBase}/audit?${q}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) {
+      listEl.innerHTML = '<p class="text-sm text-rose-600 text-center py-10">Could not load audit entries.</p>';
+      return;
+    }
+    const j = await r.json();
+    if (!j.items || !j.items.length) {
+      listEl.innerHTML = '<p class="text-sm text-gray-400 text-center py-10">No audit entries match.</p>';
+      return;
+    }
+    listEl.innerHTML = j.items.map(it => `
+      <div class="bg-white rounded-xl border border-gray-100 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">${escapeHtml(it.action)}</span>
+              ${it.target ? `<span class="text-xs text-gray-500 font-mono">${escapeHtml(it.target)}</span>` : ''}
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              <i class="fas fa-user"></i> ${escapeHtml(it.actor_role || '—')} · <span class="font-mono">${escapeHtml((it.actor_id || '—').slice(0, 8))}</span>
+              · <i class="fas fa-network-wired"></i> ${escapeHtml(it.ip || '—')}
+            </p>
+            <p class="text-[11px] text-gray-400 mt-1">
+              <i class="fas fa-fingerprint"></i> ${escapeHtml((it.device_fingerprint || '').slice(0, 16))} ·
+              ${it.created_at ? new Date(it.created_at).toLocaleString() : '—'}
+            </p>
+            ${it.meta && Object.keys(it.meta).length ? `<pre class="mt-2 text-[11px] bg-gray-50 rounded p-2 overflow-x-auto">${escapeHtml(JSON.stringify(it.meta, null, 2))}</pre>` : ''}
           </div>
-          <p class="text-xs text-gray-500 mt-1">
-            <i class="fas fa-user"></i> ${it.actor_role || '—'} · <span class="font-mono">${(it.actor_id||'—').slice(0,8)}</span>
-            · <i class="fas fa-network-wired"></i> ${it.ip || '—'}
-          </p>
-          <p class="text-[11px] text-gray-400 mt-1">
-            <i class="fas fa-fingerprint"></i> ${(it.device_fingerprint||'').slice(0,16)} ·
-            ${new Date(it.created_at).toLocaleString()}
-          </p>
-          ${Object.keys(it.meta||{}).length ? `<pre class="mt-2 text-[11px] bg-gray-50 rounded p-2 overflow-x-auto">${JSON.stringify(it.meta,null,2)}</pre>` : ''}
         </div>
       </div>
-    </div>
-  `).join('');
-}
+    `).join('');
+  }
 
-document.getElementById('auditApply').addEventListener('click', loadList);
-document.getElementById('auditSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadList(); });
-loadActions().then(loadList);
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[m]);
+  }
+
+  applyEl?.addEventListener('click', async () => {
+    try {
+      const t = localStorage.getItem(TOKEN_KEY) || await sessionToken();
+      await loadList(t);
+    } catch (e) {
+      errBox.classList.remove('hidden');
+      errMsg.textContent = e.message || String(e);
+    }
+  });
+
+  document.getElementById('auditSearch').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applyEl?.click();
+  });
+
+  bootstrap();
+})();
 </script>
 {% endblock %}

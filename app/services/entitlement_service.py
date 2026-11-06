@@ -91,6 +91,49 @@ def can_add_user(tenant_id, role="cashier"):
     return True, None
 
 
+def downgrade_blocker(tenant_id, target_tier: str):
+    """
+    Return None if the tenant can downgrade to `target_tier`, or a human
+    readable reason string if they can't.
+
+    Rationale: blocking only *new* resources on a downgrade lets a tenant
+    keep 5 branches on a 1-branch plan. We refuse the downgrade until the
+    tenant reduces their resource usage to fit the target plan.
+    """
+    tiers = current_app.config["PRICING_TIERS"]
+    if target_tier not in tiers:
+        return "Unknown plan"
+
+    target = tiers[target_tier]
+    branch_limit = target.get("branches", 1)
+    user_limit = target.get("users", -1)
+
+    if branch_limit != -1:
+        branches = count_active_branches(tenant_id)
+        if branches > branch_limit:
+            return (
+                f"You have {branches} active branches but the "
+                f"{target.get('label', target_tier)} plan allows {branch_limit}. "
+                f"Deactivate branches before switching."
+            )
+
+    if user_limit != -1:
+        users = count_active_users(tenant_id)
+        if users > user_limit:
+            return (
+                f"You have {users} active users but the "
+                f"{target.get('label', target_tier)} plan allows {user_limit}. "
+                f"Deactivate users before switching."
+            )
+
+    return None
+
+
+def can_downgrade_to(tenant_id, target_tier: str):
+    blocker = downgrade_blocker(tenant_id, target_tier)
+    return (blocker is None), blocker
+
+
 def can_use_feature(tenant_id, feature):
     if tenant_has_feature(tenant_id, feature):
         return True, None

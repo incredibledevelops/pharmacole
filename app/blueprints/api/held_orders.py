@@ -2,16 +2,27 @@ from flask import request, jsonify, g
 from . import api_bp
 from decorators import token_required, api_role_required, api_subscription_required
 from app.services import held_order_service
+from app.services.held_order_service import _BRANCH_ANY
+from utils import oid
+
+
+def _user_branch():
+    return oid(g.api_user.branch_id) if getattr(g.api_user, "branch_id", None) else None
 
 
 @api_bp.route("/held-orders", methods=["GET"])
 @token_required
 @api_subscription_required
 def list_held():
-    rows = held_order_service.list_for_tenant(g.api_user.tenant_id, limit=200)
+    branch = _user_branch()
+    rows = held_order_service.list_for_tenant(
+        g.api_user.tenant_id, limit=200,
+        branch_id=branch if branch else _BRANCH_ANY,
+    )
     return jsonify({"items": [{
         "id": str(h["_id"]),
         "label": h.get("label"),
+        "branch_id": str(h["branch_id"]) if h.get("branch_id") else None,
         "items": [
             {"name": i["name"], "qty": i["qty"], "price": i["price"]}
             for i in h.get("items", [])
@@ -33,6 +44,7 @@ def hold():
             cashier=g.api_user,
             items=data.get("items") or [],
             label=data.get("label"),
+            branch_id=_user_branch(),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -44,6 +56,12 @@ def hold():
 @api_role_required("cashier", "owner")
 @api_subscription_required
 def delete_held(held_id):
+    held = held_order_service.get(g.api_user.tenant_id, held_id)
+    if not held:
+        return jsonify({"error": "Not found"}), 404
+    branch = _user_branch()
+    if branch is not None and held.get("branch_id") != branch:
+        return jsonify({"error": "Forbidden"}), 403
     ok = held_order_service.delete(g.api_user.tenant_id, held_id)
     return jsonify({"ok": ok}), 200 if ok else 404
 
@@ -56,6 +74,9 @@ def resume(held_id):
     h = held_order_service.get(g.api_user.tenant_id, held_id)
     if not h:
         return jsonify({"error": "Not found"}), 404
+    branch = _user_branch()
+    if branch is not None and h.get("branch_id") != branch:
+        return jsonify({"error": "Forbidden"}), 403
     held_order_service.delete(g.api_user.tenant_id, held_id)
     return jsonify({
         "items": [{

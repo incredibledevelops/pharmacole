@@ -23,7 +23,6 @@ class User(UserMixin):
         self.password_hash = data.get("password_hash") or ""
         self.role = data.get("role", "cashier")
         self.tenant_id = str(data["tenant_id"]) if data.get("tenant_id") else None
-        # NEW — branch scoping. None => has access to all branches in tenant.
         self.branch_id = str(data["branch_id"]) if data.get("branch_id") else None
         self.is_active_user = bool(data.get("is_active", True))
         self.phone = data.get("phone")
@@ -53,7 +52,7 @@ class User(UserMixin):
 
 
 # ---------------------------------------------------------------------------
-# Tenant  (carries tier + pending tier + branding + multi-branch limits)
+# Tenant
 # ---------------------------------------------------------------------------
 
 class Tenant:
@@ -72,7 +71,6 @@ class Tenant:
         self.paystack_customer_code = data.get("paystack_customer_code")
         self.created_at = data.get("created_at") or datetime.utcnow()
 
-        # Tier + pending tier + branding + multi-branch
         self.tier = data.get("tier", "pro")
         self.pending_tier = data.get("pending_tier")
         self.logo_url = data.get("logo_url")
@@ -217,10 +215,32 @@ def ensure_indexes():
     db.branches.create_index("tenant_id")
 
     # inventory
+    # NOTE: The old unique index [tenant_id, sku, batch_number] (without
+    # branch_id) prevented the same SKU+batch from existing in two branches.
+    # We now index with branch_id when present. Legacy docs without a
+    # branch_id keep the safer 3-field uniqueness so we don't accidentally
+    # drop existing data's uniqueness guarantees.
+    try:
+        db.inventory.drop_index("tenant_id_1_sku_1_batch_number_1")
+    except Exception:
+        pass  # index didn't exist / already dropped
+    db.inventory.create_index(
+        [("tenant_id", 1), ("branch_id", 1), ("sku", 1), ("batch_number", 1)],
+        unique=True,
+        partialFilterExpression={
+            "batch_number": {"$exists": True, "$gt": ""},
+            "branch_id": {"$exists": True, "$ne": None},
+        },
+        name="tenant_branch_sku_batch_unique",
+    )
     db.inventory.create_index(
         [("tenant_id", 1), ("sku", 1), ("batch_number", 1)],
         unique=True,
-        partialFilterExpression={"batch_number": {"$exists": True, "$gt": ""}},
+        partialFilterExpression={
+            "batch_number": {"$exists": True, "$gt": ""},
+            "branch_id": {"$in": [None]},
+        },
+        name="tenant_sku_batch_no_branch_unique",
     )
     db.inventory.create_index([("tenant_id", 1), ("expiry_date", 1)])
     db.inventory.create_index([("tenant_id", 1), ("quantity", 1)])
@@ -231,9 +251,6 @@ def ensure_indexes():
     db.sales.create_index([("tenant_id", 1), ("timestamp", -1)])
     db.sales.create_index([("tenant_id", 1), ("cashier_id", 1)])
     db.sales.create_index([("tenant_id", 1), ("branch_id", 1), ("timestamp", -1)])
-    # Offline sync idempotency. Only documents where client_uuid is actually
-    # a string are indexed, so existing sales without client_uuid (or with
-    # client_uuid: null) are ignored entirely.
     db.sales.create_index(
         [("tenant_id", 1), ("client_uuid", 1)],
         unique=True,
@@ -276,6 +293,5 @@ def ensure_indexes():
     db.subscription_events.create_index([("tenant_id", 1), ("created_at", -1)])
     db.subscription_events.create_index("event_type")
 
-    # push subscriptions / sync queue
+    # push subscriptions
     db.push_subscriptions.create_index([("tenant_id", 1), ("user_id", 1)], unique=True)
-    db.sync_queue.create_index([("tenant_id", 1), ("created_at", -1)])

@@ -2,7 +2,7 @@
   "name": "Pharmacole",
   "short_name": "Pharmacole",
   "description": "Multi-tenant pharmacy SaaS for Ghana",
-  "start_url": "/cashier/pos?source=pwa",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -18,8 +18,8 @@
     }
   ],
   "shortcuts": [
+    { "name": "Dashboard", "url": "/dashboard", "icons": [{"src": "/static/logo.svg", "sizes": "any"}] },
     { "name": "Point of Sale", "url": "/cashier/pos", "icons": [{"src": "/static/logo.svg", "sizes": "any"}] },
-    { "name": "Inventory", "url": "/pharmacist/inventory", "icons": [{"src": "/static/logo.svg", "sizes": "any"}] },
-    { "name": "Shift Report", "url": "/cashier/shift", "icons": [{"src": "/static/logo.svg", "sizes": "any"}] }
+    { "name": "Inventory", "url": "/pharmacist/inventory", "icons": [{"src": "/static/logo.svg", "sizes": "any"}] }
   ]
 }

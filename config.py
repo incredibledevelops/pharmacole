@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -70,27 +71,35 @@ class Config:
     JSON_SORT_KEYS = False
     TEMPLATES_AUTO_RELOAD = _bool("FLASK_DEBUG", False)
 
-    # API
-    JWT_SECRET = os.getenv("JWT_SECRET") or SECRET_KEY or "dev-only-secret-change-me"
+    # ------------------------------------------------------------------
+    # API / JWT
+    # ------------------------------------------------------------------
+    JWT_SECRET = os.getenv("JWT_SECRET")
     JWT_ALGORITHM = "HS256"
     JWT_ACCESS_TTL = timedelta(days=_int("JWT_ACCESS_TTL_DAYS", 30))
     JWT_REFRESH_TTL = timedelta(days=_int("JWT_REFRESH_TTL_DAYS", 120))
     CORS_ORIGINS = _cors_origins()
 
-    # Email
-    SMTP_HOST = os.getenv("SMTP_HOST", "")
-    SMTP_PORT = _int("SMTP_PORT", 587)
-    SMTP_USER = os.getenv("SMTP_USER", "")
-    SMTP_PASS = os.getenv("SMTP_PASS", "")
-    SMTP_FROM = os.getenv("SMTP_FROM", "receipts@pharmacole.com")
-    SMTP_USE_TLS = _bool("SMTP_USE_TLS", True)
+    # ------------------------------------------------------------------
+    # Email — Resend (replaces SMTP)
+    # ------------------------------------------------------------------
+    # Leave RESEND_API_KEY empty to disable email sending (calls become no-ops).
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+    # Must be a verified domain on Resend. Supports "Name <email>" format,
+    # e.g. "Pharmacole <receipts@pharmacole.com>".
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Pharmacole <receipts@pharmacole.com>")
 
-    # WhatsApp
-    WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
-    WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
-    WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "https://graph.facebook.com/v20.0").rstrip("/")
+    # ------------------------------------------------------------------
+    # SMS — Arkesel (replaces WhatsApp Cloud API)
+    # ------------------------------------------------------------------
+    # Leave ARKESEL_API_KEY empty to disable SMS sending (calls become no-ops).
+    ARKESEL_API_KEY = os.getenv("ARKESEL_API_KEY", "").strip()
+    ARKESEL_SENDER_ID = os.getenv("ARKESEL_SENDER_ID", "Pharmacole")
+    ARKESEL_BASE_URL = os.getenv("ARKESEL_BASE_URL", "https://sms.arkesel.com/api/v2").rstrip("/")
 
-    # Web push
+    # ------------------------------------------------------------------
+    # Web push (unchanged — separate from email/SMS)
+    # ------------------------------------------------------------------
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
     VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:support@pharmacole.com")
@@ -100,7 +109,7 @@ class Config:
     ALLOWED_LOGO_EXT = {"png", "jpg", "jpeg", "webp", "svg"}
 
     # ------------------------------------------------------------------
-    # Pricing tiers — features here ARE the enforcement list
+    # Pricing tiers (unchanged)
     # ------------------------------------------------------------------
     PRICING_TIERS = {
         "starter": {
@@ -109,12 +118,7 @@ class Config:
             "branches": 1,
             "users": 2,
             "tagline": "For a single counter",
-            "features": [
-                "pos",
-                "inventory",
-                "expiry",
-                "email_receipts",
-            ],
+            "features": ["pos", "inventory", "expiry", "email_receipts"],
             "feature_list": [
                 "Point of Sale (1 branch)",
                 "Inventory & expiry tracking",
@@ -130,21 +134,15 @@ class Config:
             "users": -1,
             "tagline": "Most pharmacies",
             "features": [
-                "pos",
-                "inventory",
-                "expiry",
-                "email_receipts",
-                "whatsapp_receipts",
-                "reports",
-                "suppliers",
-                "audit_log",
+                "pos", "inventory", "expiry", "email_receipts",
+                "sms_receipts", "reports", "suppliers", "audit_log",
             ],
             "feature_list": [
                 "Everything in Starter",
                 "Unlimited users",
                 "Supplier management",
                 "CSV exports + shift reports",
-                "WhatsApp receipts",
+                "SMS receipts",
                 "Audit log",
             ],
             "highlight": True,
@@ -156,17 +154,9 @@ class Config:
             "users": -1,
             "tagline": "Growing chains",
             "features": [
-                "pos",
-                "inventory",
-                "expiry",
-                "email_receipts",
-                "whatsapp_receipts",
-                "reports",
-                "suppliers",
-                "audit_log",
-                "multi_branch",
-                "consolidated_reports",
-                "branding",
+                "pos", "inventory", "expiry", "email_receipts",
+                "sms_receipts", "reports", "suppliers", "audit_log",
+                "multi_branch", "consolidated_reports", "branding",
             ],
             "feature_list": [
                 "Everything in Pro",
@@ -183,19 +173,10 @@ class Config:
             "users": -1,
             "tagline": "Chains & franchises",
             "features": [
-                "pos",
-                "inventory",
-                "expiry",
-                "email_receipts",
-                "whatsapp_receipts",
-                "reports",
-                "suppliers",
-                "audit_log",
-                "multi_branch",
-                "consolidated_reports",
-                "branding",
-                "api_access",
-                "sla",
+                "pos", "inventory", "expiry", "email_receipts",
+                "sms_receipts", "reports", "suppliers", "audit_log",
+                "multi_branch", "consolidated_reports", "branding",
+                "api_access", "sla",
             ],
             "feature_list": [
                 "Everything in Business",
@@ -209,6 +190,7 @@ class Config:
 
     TIER_ORDER = ["starter", "pro", "business", "enterprise"]
     API_TIERS = {"enterprise"}
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -227,10 +209,31 @@ class TestingConfig(Config):
     CORS_ORIGINS = "*"
 
 
+def _resolve_jwt_secret(config_obj, env: str) -> None:
+    """Ensure JWT_SECRET is set. In production, refuse to boot without it."""
+    secret = getattr(config_obj, "JWT_SECRET", None) or getattr(config_obj, "SECRET_KEY", None)
+
+    if env == "production":
+        if not secret or secret == "dev-only-secret-change-me":
+            raise RuntimeError(
+                "JWT_SECRET (or SECRET_KEY) must be set to a strong value in production. "
+                "Refusing to start with an insecure secret."
+            )
+        config_obj.JWT_SECRET = secret
+        return
+
+    if not secret:
+        secret = secrets.token_urlsafe(48)
+    config_obj.JWT_SECRET = secret
+
+
 def get_config():
     env = os.getenv("FLASK_ENV", "development").lower()
     if env == "production":
-        return ProductionConfig
-    if env == "testing":
-        return TestingConfig
-    return DevelopmentConfig
+        cls = ProductionConfig
+    elif env == "testing":
+        cls = TestingConfig
+    else:
+        cls = DevelopmentConfig
+    _resolve_jwt_secret(cls, env)
+    return cls

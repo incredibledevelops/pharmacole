@@ -1,8 +1,9 @@
 import hmac
 import hashlib
+from datetime import datetime
+
 from flask import Blueprint, request, jsonify, current_app
 
-from extensions import mongo
 from app.services import payments_service, tenant_service
 
 webhooks_bp = Blueprint("webhooks", __name__, url_prefix="/webhooks")
@@ -32,20 +33,40 @@ def paystack():
 
     if event == "charge.success":
         reference = data.get("reference")
-        if reference:
-            record = payments_service.find_by_reference(reference)
-            if record and record.get("status") != "success":
-                payments_service.mark_paid(reference, data)
-                # Promote the pending tier (if any) before activating
-                tenant_service.apply_pending_tier(record["tenant_id"])
-                customer_code = (data.get("customer") or {}).get("customer_code")
-                tenant_service.activate(
-                    record["tenant_id"], paystack_customer_code=customer_code
-                )
+        if not reference:
+            return jsonify({"status": "ignored"}), 200
+
+        record = payments_service.find_by_reference(reference)
+        if not record:
+            current_app.logger.warning("Webhook for unknown reference %s", reference)
+            return jsonify({"status": "ignored"}), 200
+
+        # --- Idempotency: if we've already processed this payment, do NOT
+        # extend the subscription again. Paystack can retry webhooks.
+        if record.get("status") == "success":
+            current_app.logger.info("Webhook replay for %s — already processed", reference)
+            return jsonify({"status": "already_processed"}), 200
+
+        try:
+            payments_service.mark_paid(reference, data)
+            tenant_service.apply_pending_tier(record["tenant_id"])
+            customer_code = (data.get("customer") or {}).get("customer_code")
+            tenant_service.activate(
+                record["tenant_id"],
+                paystack_customer_code=customer_code,
+            )
+        except Exception as e:
+            current_app.logger.exception("Webhook processing failed for %s", reference)
+            # Return 500 so Paystack retries. mark_paid is idempotent and
+            # `activate` is guarded by the status check above.
+            return jsonify({"error": "processing_failed"}), 500
 
     elif event in ("charge.failed", "transfer.failed"):
         reference = data.get("reference")
         if reference:
-            payments_service.mark_failed(reference, reason=data.get("gateway_response"))
+            payments_service.mark_failed(
+                reference,
+                reason=data.get("gateway_response"),
+            )
 
     return jsonify({"status": "ok"}), 200

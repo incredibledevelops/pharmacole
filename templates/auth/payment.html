@@ -202,14 +202,14 @@
         </button>
       </div>
 
-      <!-- Success toast (hidden until verified) -->
+      <!-- Success toast -->
       <div id="paySuccess" role="status" aria-live="polite"
         class="hidden mt-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl p-3 items-center gap-2">
         <i class="fas fa-circle-check"></i>
         <span>Payment verified. Redirecting…</span>
       </div>
 
-      <!-- Slot for the "Already paid? Refresh status" button -->
+      <!-- Refresh status slot -->
       <div id="refreshStatusSlot" class="text-center mt-3"></div>
 
       <!-- Trust row -->
@@ -253,7 +253,6 @@
 </div>
 
 <script src="https://js.paystack.co/v1/inline.js"></script>
-<script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 
 <script>
   window.PHARMACOLE_PAYMENT = {
@@ -272,38 +271,14 @@
 <script>
   (function () {
     'use strict';
-
     var cfg = window.PHARMACOLE_PAYMENT || {};
-    var btn = document.getElementById('payBtn');
-    var label = document.getElementById('payBtnLabel');
-    var errBox = document.getElementById('payError');
-    var errMsg = document.getElementById('payErrorMsg');
-    var errHint = document.getElementById('payErrorHint');
-    var okBox = document.getElementById('paySuccess');
-    var timerBox = document.getElementById('payTimer');
-    var timerSeconds = document.getElementById('payTimerSeconds');
+
     var copyBtn = document.getElementById('copyTenantBtn');
     var summaryPlan = document.getElementById('summaryPlan');
     var summaryTotal = document.getElementById('summaryTotal');
-    var refreshSlot = document.getElementById('refreshStatusSlot');
-
-    var REF_KEY = 'pharmacole_last_reference';
+    var label = document.getElementById('payBtnLabel');
     var TIER_KEY = 'pharmacole_selected_tier';
-    var timerInterval = null;
-    var timerStart = 0;
 
-    /* ---------- Session storage helpers ---------- */
-    function rememberReference(ref) {
-      try { if (ref) sessionStorage.setItem(REF_KEY, ref); } catch (e) {}
-    }
-    function readReference() {
-      try { return sessionStorage.getItem(REF_KEY); } catch (e) { return null; }
-    }
-    function forgetReference() {
-      try { sessionStorage.removeItem(REF_KEY); } catch (e) {}
-    }
-
-    /* ---------- Tier persistence ---------- */
     function rememberTier(tier) {
       try { sessionStorage.setItem(TIER_KEY, tier); } catch (e) {}
     }
@@ -311,7 +286,7 @@
       try { return sessionStorage.getItem(TIER_KEY); } catch (e) { return null; }
     }
 
-    /* Restore the last-used tier (only if it differs from server-side default) */
+    /* Restore last-used tier */
     (function () {
       var saved = readTier();
       if (!saved || saved === cfg.tier) return;
@@ -319,7 +294,38 @@
       if (card) card.click();
     })();
 
-    /* ---------- Tier selection ---------- */
+    /* Copy tenant code */
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var text = copyBtn.dataset.copy || '';
+        if (!text) return;
+        var done = function () {
+          var icon = copyBtn.querySelector('i');
+          if (icon) {
+            icon.className = 'fas fa-check text-[10px] text-emerald-500';
+            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400);
+          }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+        } else {
+          fallbackCopy(text); done();
+        }
+      });
+    }
+
+    /* Tier card selection (UI only — payment.js reads cfg.tier) */
     document.querySelectorAll('.tier-card').forEach(function (card) {
       card.addEventListener('click', function () {
         var tier = card.dataset.tier;
@@ -355,7 +361,6 @@
         if (summaryPlan && planName) summaryPlan.textContent = planName.textContent + ' · Monthly';
         if (summaryTotal) {
           summaryTotal.textContent = 'GH₵ ' + amount.toFixed(2);
-          // Soft pulse on amount change
           summaryTotal.style.transition = 'color 0.3s ease';
           summaryTotal.style.color = '#14b8a6';
           setTimeout(function () { summaryTotal.style.color = ''; }, 500);
@@ -363,230 +368,9 @@
         if (label) label.innerHTML = 'Pay GH₵ ' + amount.toFixed(2) + ' with Paystack';
       });
     });
-
-    /* ---------- Error / success / loading / timer ---------- */
-    function showError(msg, hint) {
-      if (!errBox || !errMsg) return;
-      errMsg.textContent = msg;
-      if (errHint) errHint.textContent = hint || '';
-      errBox.classList.remove('hidden');
-      errBox.classList.add('flex');
-      if (okBox) { okBox.classList.add('hidden'); okBox.classList.remove('flex'); }
-      try { errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
-    }
-    function hideError() {
-      if (!errBox) return;
-      errBox.classList.add('hidden');
-      errBox.classList.remove('flex');
-    }
-    function showSuccess() {
-      if (!okBox) return;
-      hideError();
-      okBox.classList.remove('hidden');
-      okBox.classList.add('flex');
-    }
-
-    function setLoading(on, text) {
-      if (!btn) return;
-      btn.disabled = !!on;
-      btn.setAttribute('aria-busy', on ? 'true' : 'false');
-      if (label) {
-        label.innerHTML = on
-          ? '<i class="fas fa-circle-notch fa-spin"></i> ' + (text || 'Processing…')
-          : 'Pay GH₵ ' + (cfg.amount ? cfg.amount.toFixed(2) : '') + ' with Paystack';
-      }
-      if (on) startTimer();
-      else stopTimer();
-    }
-    function startTimer() {
-      if (!timerBox || !timerSeconds) return;
-      timerStart = Date.now();
-      timerBox.classList.remove('hidden');
-      timerBox.classList.add('inline-flex');
-      timerSeconds.textContent = '0s';
-      clearInterval(timerInterval);
-      timerInterval = setInterval(function () {
-        var secs = Math.floor((Date.now() - timerStart) / 1000);
-        timerSeconds.textContent = secs + 's';
-        if (secs === 60) showError('Still waiting for Paystack?', 'If the popup was blocked, try again.');
-      }, 1000);
-    }
-    function stopTimer() {
-      clearInterval(timerInterval);
-      if (timerBox) { timerBox.classList.add('hidden'); timerBox.classList.remove('inline-flex'); }
-    }
-
-    /* ---------- Copy tenant code ---------- */
-    function fallbackCopy(text) {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(ta);
-    }
-    if (copyBtn) {
-      copyBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        var text = copyBtn.dataset.copy || '';
-        if (!text) return;
-        function done() {
-          var icon = copyBtn.querySelector('i');
-          if (icon) {
-            icon.className = 'fas fa-check text-[10px] text-emerald-500';
-            setTimeout(function () { icon.className = 'fas fa-copy text-[10px]'; }, 1400);
-          }
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
-        } else {
-          fallbackCopy(text); done();
-        }
-      });
-    }
-
-    /* ---------- "Already paid? Refresh status" ---------- */
-    function renderRefreshButton() {
-      if (!refreshSlot) return;
-      var lastRef = readReference();
-      if (!lastRef) { refreshSlot.innerHTML = ''; return; }
-
-      var refreshLink = document.createElement('button');
-      refreshLink.type = 'button';
-      refreshLink.className = 'text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1';
-      refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
-
-      refreshLink.addEventListener('click', function () {
-        refreshLink.disabled = true;
-        refreshLink.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Checking…';
-
-        fetch(cfg.verifyUrl + '?reference=' + encodeURIComponent(lastRef), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken },
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (v) {
-            if (v && v.ok) {
-              forgetReference();
-              showSuccess();
-              setTimeout(function () { window.location.href = cfg.dashUrl; }, 800);
-            } else {
-              refreshLink.disabled = false;
-              refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
-              showError((v && v.error) || 'No successful payment found yet.');
-            }
-          })
-          .catch(function () {
-            refreshLink.disabled = false;
-            refreshLink.innerHTML = '<i class="fas fa-rotate"></i> Already paid? Refresh status';
-            showError('Network error while checking payment status.');
-          });
-      });
-
-      refreshSlot.innerHTML = '';
-      refreshSlot.appendChild(refreshLink);
-    }
-    renderRefreshButton();
-
-    /* ---------- Payment init ---------- */
-    function initializeAndPay() {
-      hideError();
-      setLoading(true, 'Initializing...');
-
-      fetch(cfg.initUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRFToken': cfg.csrfToken,
-        },
-        body: JSON.stringify({ tier: cfg.tier }),
-      })
-        .then(function (r) {
-          var ct = r.headers.get('content-type') || '';
-          if (ct.indexOf('application/json') === -1) {
-            throw new Error('Unexpected server response. Please try again.');
-          }
-          return r.json().then(function (data) {
-            if (!r.ok || data.error) throw new Error(data.error || 'Could not initialize payment.');
-            return data;
-          });
-        })
-        .then(function (data) {
-          if (!data.reference && !data.access_code && !data.authorization_url) {
-            throw new Error('Payment provider did not return a valid response.');
-          }
-          if (data.reference) rememberReference(data.reference);
-
-          setLoading(false);
-
-          var amountToCharge = data.amount || cfg.amount;
-
-          var handler = PaystackPop.setup({
-            key: cfg.publicKey,
-            email: cfg.email,
-            amount: Math.round(amountToCharge * 100),
-            currency: 'GHS',
-            ref: data.reference,
-            metadata: {
-              tenant_code: cfg.tenantCode,
-              tier: data.tier || cfg.tier,
-              custom_fields: [
-                { display_name: 'Tenant', variable_name: 'tenant_code', value: cfg.tenantCode },
-                { display_name: 'Tier', variable_name: 'tier', value: data.tier || cfg.tier },
-              ],
-            },
-            callback: function (response) {
-              setLoading(true, 'Verifying payment...');
-              fetch(cfg.verifyUrl + '?reference=' + encodeURIComponent(response.reference), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-CSRFToken': cfg.csrfToken },
-              })
-                .then(function (r) { return r.json(); })
-                .then(function (v) {
-                  if (v && v.ok) {
-                    forgetReference();
-                    showSuccess();
-                    setTimeout(function () { window.location.href = cfg.dashUrl; }, 800);
-                  } else {
-                    showError((v && v.error) || 'Verification failed. Contact support if you were charged.');
-                    setLoading(false);
-                  }
-                })
-                .catch(function () {
-                  showError('Could not verify payment. Contact support if you were charged.');
-                  setLoading(false);
-                });
-            },
-            onClose: function () {
-              setLoading(false);
-              renderRefreshButton();
-            },
-          });
-          handler.openIframe();
-        })
-        .catch(function (err) {
-          showError(err.message || 'Could not initialize payment.');
-          setLoading(false);
-        });
-    }
-
-    if (btn) {
-      if (typeof window.initPaymentPage === 'function') {
-        window.initPaymentPage(cfg);
-        btn.addEventListener('click', function () {
-          setTimeout(renderRefreshButton, 800);
-        });
-      } else {
-        btn.addEventListener('click', initializeAndPay);
-      }
-    }
   })();
 </script>
+
+<script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 
 {% endblock %}

@@ -118,8 +118,11 @@ def _qr_data_uri(text: str) -> str:
 
 def render_receipt_html(tenant, sale, branch_name=None):
     qr_data_uri = ""
-    if tenant and sale.get("receipt_no"):
-        verify_url = f"{current_app.config['BASE_URL']}/r/{sale['receipt_no']}"
+    if tenant and sale.get("receipt_no") and getattr(tenant, "tenant_code", None):
+        verify_url = (
+            f"{current_app.config['BASE_URL']}/r/{sale['receipt_no']}"
+            f"?tenant={tenant.tenant_code}"
+        )
         qr_data_uri = _qr_data_uri(verify_url)
 
     return render_template_string(

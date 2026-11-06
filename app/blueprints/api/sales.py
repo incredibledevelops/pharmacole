@@ -14,7 +14,7 @@ def checkout():
     data = request.get_json(silent=True) or {}
     items = data.get("items") or []
     method = (data.get("payment_method") or "").strip().lower()
-    client_uuid = data.get("client_uuid")  # NEW — offline idempotency
+    client_uuid = data.get("client_uuid")
     branch_id = data.get("branch_id") or g.api_user.branch_id
     customer_name = data.get("customer_name")
     discount = data.get("discount", 0.0)
@@ -30,10 +30,12 @@ def checkout():
             customer_name=customer_name,
             discount=discount,
         )
+    except sales_service.IdempotentReplay as replay:
+        return jsonify(sales_service._sale_to_dict(replay.existing)), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    # NEW — optional automatic delivery
+    # Optional automatic delivery: "email", "sms", or "both".
     deliver = (data.get("deliver") or "").lower()
     customer_email = data.get("customer_email")
     customer_phone = data.get("customer_phone")
@@ -44,11 +46,11 @@ def checkout():
         except Exception as e:
             receipt["email_error"] = str(e)
 
-    if deliver in ("whatsapp", "both") and customer_phone:
+    if deliver in ("sms", "both") and customer_phone:
         try:
-            _whatsapp_receipt(customer_phone, receipt)
+            _sms_receipt(customer_phone, receipt)
         except Exception as e:
-            receipt["whatsapp_error"] = str(e)
+            receipt["sms_error"] = str(e)
 
     return jsonify(receipt), 200
 
@@ -57,12 +59,18 @@ def checkout():
 @token_required
 @api_subscription_required
 def list_sales():
-    limit = int(request.args.get("limit", 200))
+    try:
+        limit = int(request.args.get("limit", 200))
+    except (TypeError, ValueError):
+        limit = 200
     branch_id = request.args.get("branch_id")
     days = request.args.get("days")
     since = None
     if days:
-        since = datetime.utcnow() - timedelta(days=int(days))
+        try:
+            since = datetime.utcnow() - timedelta(days=int(days))
+        except (TypeError, ValueError):
+            since = None
 
     rows = sales_service.list_for_tenant(
         g.api_user.tenant_id, limit=min(limit, 2000),
@@ -96,24 +104,25 @@ def today():
     })
 
 
-# ---------------------------------------------------------------------------
-# NEW — Bulk offline sync
-# ---------------------------------------------------------------------------
-
 @api_bp.route("/sales/sync", methods=["POST"])
 @token_required
 @api_role_required("cashier", "owner", "pharmacist")
 @api_subscription_required
 def sync_offline():
-    """
-    Accept a batch of offline sales. Each must carry a client_uuid
-    so retries are idempotent.
-    """
+    """Accept a batch of offline sales. Each must carry a client_uuid."""
     data = request.get_json(silent=True) or {}
     batch = data.get("sales") or []
     results = []
 
     for row in batch:
+        client_uuid = (row.get("client_uuid") or "").strip()
+        if not client_uuid:
+            results.append({
+                "client_uuid": None,
+                "ok": False,
+                "error": "client_uuid is required for offline sync",
+            })
+            continue
         try:
             r = sales_service.record_sale(
                 tenant_id=g.api_user.tenant_id,
@@ -121,25 +130,31 @@ def sync_offline():
                 items=row.get("items") or [],
                 payment_method=(row.get("payment_method") or "").strip().lower(),
                 branch_id=row.get("branch_id") or g.api_user.branch_id,
-                client_uuid=row.get("client_uuid"),
+                client_uuid=client_uuid,
                 customer_name=row.get("customer_name"),
                 discount=row.get("discount", 0.0),
             )
-            results.append({"client_uuid": row.get("client_uuid"), "ok": True,
+            results.append({"client_uuid": client_uuid, "ok": True,
                             "receipt_no": r["receipt_no"]})
+        except sales_service.IdempotentReplay as replay:
+            results.append({
+                "client_uuid": client_uuid,
+                "ok": True,
+                "receipt_no": replay.existing["receipt_no"],
+                "idempotent": True,
+            })
         except Exception as e:
-            results.append({"client_uuid": row.get("client_uuid"), "ok": False,
+            results.append({"client_uuid": client_uuid, "ok": False,
                             "error": str(e)})
 
     return jsonify({"results": results}), 200
 
 
 # ---------------------------------------------------------------------------
-# helper functions (import locally to avoid circular import at module load)
+# helper functions
 # ---------------------------------------------------------------------------
 
 def _email_receipt(to_email, receipt_dict):
-    from flask import current_app
     from models import find_tenant_by_id
     from app.services import receipt_service, notification_service
     tenant = find_tenant_by_id(g.api_user.tenant_id)
@@ -152,12 +167,12 @@ def _email_receipt(to_email, receipt_dict):
     notification_service.email_receipt(to_email, tenant, sale, pdf_bytes=pdf)
 
 
-def _whatsapp_receipt(to_phone, receipt_dict):
+def _sms_receipt(to_phone, receipt_dict):
     from models import find_tenant_by_id
     from app.services import notification_service
     tenant = find_tenant_by_id(g.api_user.tenant_id)
     sale = _sale_dict_for_receipt(receipt_dict)
-    notification_service.whatsapp_receipt(to_phone, tenant, sale)
+    notification_service.sms_receipt(to_phone, tenant, sale)
 
 
 def _sale_dict_for_receipt(r):

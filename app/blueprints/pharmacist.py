@@ -8,7 +8,7 @@ from models import find_tenant_by_id
 from app.services import (
     inventory_service, prescription_service, supplier_service,
 )
-from utils import to_int
+from utils import to_int, oid
 
 pharmacist_bp = Blueprint("pharmacist", __name__, url_prefix="/pharmacist")
 
@@ -21,12 +21,18 @@ def _guard():
     return None
 
 
+def _branch_for(user):
+    bid = oid(getattr(user, "branch_id", None))
+    return bid if bid else inventory_service._BRANCH_ANY
+
+
 @pharmacist_bp.route("/dashboard")
 def dashboard():
     tenant = find_tenant_by_id(current_user.tenant_id)
-    total_skus = inventory_service.count_for_tenant(current_user.tenant_id)
-    low_stock = inventory_service.low_stock(current_user.tenant_id, limit=20)
-    expiring = inventory_service.expiring_within(current_user.tenant_id, limit=20)
+    branch = _branch_for(current_user)
+    total_skus = inventory_service.count_for_tenant(current_user.tenant_id, branch_id=branch)
+    low_stock = inventory_service.low_stock(current_user.tenant_id, limit=20, branch_id=branch)
+    expiring = inventory_service.expiring_within(current_user.tenant_id, limit=20, branch_id=branch)
     pending_rx = prescription_service.count_pending(current_user.tenant_id)
 
     return render_template(
@@ -42,8 +48,23 @@ def dashboard():
 @pharmacist_bp.route("/inventory")
 def inventory():
     tenant = find_tenant_by_id(current_user.tenant_id)
-    items = inventory_service.list_for_tenant(current_user.tenant_id, limit=2000)
-    return render_template("pharmacist/inventory.html", tenant=tenant, items=items)
+    branch = _branch_for(current_user)
+    items = inventory_service.list_for_tenant(
+        current_user.tenant_id, limit=2000, branch_id=branch,
+    )
+    low_count = len(inventory_service.low_stock(
+        current_user.tenant_id, limit=10000, branch_id=branch,
+    ))
+    expiring_count = len(inventory_service.expiring_within(
+        current_user.tenant_id, days=30, limit=10000, branch_id=branch,
+    ))
+    return render_template(
+        "pharmacist/inventory.html",
+        tenant=tenant,
+        items=items,
+        low_count=low_count,
+        expiring_count=expiring_count,
+    )
 
 
 @pharmacist_bp.route("/inventory/add", methods=["GET", "POST"])
@@ -68,7 +89,10 @@ def add_drug():
             "description": request.form.get("description"),
         }
         try:
-            inventory_service.create_item(current_user.tenant_id, data)
+            inventory_service.create_item(
+                current_user.tenant_id, data,
+                branch_id=oid(getattr(current_user, "branch_id", None)),
+            )
             flash("Drug added to inventory.", "success")
             return redirect(url_for("pharmacist.inventory"))
         except ValueError as e:
@@ -103,16 +127,23 @@ def adjust_stock(item_id):
 @pharmacist_bp.route("/expiry")
 def expiry():
     tenant = find_tenant_by_id(current_user.tenant_id)
+    branch = _branch_for(current_user)
 
     buckets = {
-        "30": inventory_service.expiring_within(current_user.tenant_id, days=30),
+        "30": inventory_service.expiring_within(
+            current_user.tenant_id, days=30, branch_id=branch,
+        ),
         "60": [],
         "90": [],
     }
-    within_60 = inventory_service.expiring_within(current_user.tenant_id, days=60)
+    within_60 = inventory_service.expiring_within(
+        current_user.tenant_id, days=60, branch_id=branch,
+    )
     seen_30 = {str(i["_id"]) for i in buckets["30"]}
     buckets["60"] = [i for i in within_60 if str(i["_id"]) not in seen_30]
-    within_90 = inventory_service.expiring_within(current_user.tenant_id, days=90)
+    within_90 = inventory_service.expiring_within(
+        current_user.tenant_id, days=90, branch_id=branch,
+    )
     seen_60 = seen_30 | {str(i["_id"]) for i in buckets["60"]}
     buckets["90"] = [i for i in within_90 if str(i["_id"]) not in seen_60]
 

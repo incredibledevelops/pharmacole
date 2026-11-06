@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, Response, current_app, abort,
@@ -142,14 +143,33 @@ def toggle_employee(user_id):
 def inventory():
     tenant = find_tenant_by_id(current_user.tenant_id)
     items = inventory_service.list_for_tenant(current_user.tenant_id, limit=2000)
-    return render_template("owner/inventory.html", tenant=tenant, items=items)
+    # Compute low / expiring server-side so template counts are accurate.
+    low_count = len(inventory_service.low_stock(current_user.tenant_id, limit=10000))
+    expiring_count = len(
+        inventory_service.expiring_within(current_user.tenant_id, days=30, limit=10000)
+    )
+    return render_template(
+        "owner/inventory.html",
+        tenant=tenant,
+        items=items,
+        low_count=low_count,
+        expiring_count=expiring_count,
+    )
 
 
 @owner_bp.route("/reports")
 @feature_required("reports")
 def reports():
     tenant = find_tenant_by_id(current_user.tenant_id)
-    sales = sales_service.list_for_tenant(current_user.tenant_id, limit=1000)
+    q = (request.args.get("q") or "").strip() or None
+    method = (request.args.get("method") or "").strip() or None
+    range_param = (request.args.get("range") or "all").strip()
+    since = _since_from_range(range_param)
+
+    sales = sales_service.list_for_tenant(
+        current_user.tenant_id, limit=1000,
+        since=since, q=q, method=method,
+    )
     summary = sales_service.summary_for_tenant(current_user.tenant_id)
 
     consolidated = None
@@ -168,7 +188,15 @@ def reports():
 @owner_bp.route("/reports/export.csv")
 @feature_required("reports")
 def export_csv():
-    sales = sales_service.list_for_tenant(current_user.tenant_id, limit=10000)
+    q = (request.args.get("q") or "").strip() or None
+    method = (request.args.get("method") or "").strip() or None
+    range_param = (request.args.get("range") or "all").strip()
+    since = _since_from_range(range_param)
+
+    sales = sales_service.list_for_tenant(
+        current_user.tenant_id, limit=10000,
+        since=since, q=q, method=method,
+    )
 
     def rows():
         yield "receipt_no,timestamp,cashier,items_count,payment_method,subtotal,vat,total\n"
@@ -192,6 +220,16 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+def _since_from_range(range_param):
+    if range_param == "today":
+        return datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    if range_param == "7":
+        return datetime.utcnow() - timedelta(days=7)
+    if range_param == "30":
+        return datetime.utcnow() - timedelta(days=30)
+    return None
 
 
 @owner_bp.route("/suppliers")

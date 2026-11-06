@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from pymongo.errors import DuplicateKeyError
 from extensions import mongo
 from models import Tenant
-from utils import oid
+from utils import oid, _coerce_dt
 
 
 def create_tenant(pharmacy_name, owner_name, owner_email, owner_phone=None,
@@ -81,7 +81,13 @@ def stats():
 
 
 def activate(tenant_id, days=None, paystack_customer_code=None):
-    """Activate or renew. Also applies any pending tier change."""
+    """
+    Activate or renew. Also applies any pending tier change.
+
+    Extends from the current expiry when the tenant is still active, so
+    early renewals stack days. Handles both datetime and ISO-string
+    expiries via _coerce_dt.
+    """
     from flask import current_app
     days = days or current_app.config["SUBSCRIPTION_DURATION_DAYS"]
     _id = oid(tenant_id)
@@ -93,22 +99,21 @@ def activate(tenant_id, days=None, paystack_customer_code=None):
     if not tenant:
         return False
 
-    # Apply pending tier change (if any) at activation time
     pending_tier = tenant.get("pending_tier")
     tiers = current_app.config["PRICING_TIERS"]
     applied_tier = None
     if pending_tier and pending_tier in tiers and pending_tier != tenant.get("tier"):
         applied_tier = pending_tier
 
-    current_expiry = tenant.get("subscription_expires_at")
+    current_expiry = _coerce_dt(tenant.get("subscription_expires_at"))
     base = now
-    if current_expiry and isinstance(current_expiry, datetime) and current_expiry > now:
+    if current_expiry and current_expiry > now:
         base = current_expiry
     new_expiry = base + timedelta(days=days)
 
     update = {
         "subscription_status": "active",
-        "subscription_started_at": tenant.get("subscription_started_at") or now,
+        "subscription_started_at": _coerce_dt(tenant.get("subscription_started_at")) or now,
         "subscription_expires_at": new_expiry,
     }
     if paystack_customer_code:
@@ -159,11 +164,16 @@ def update_branding(tenant_id, logo_url=None, receipt_header=None,
     if not _id:
         return False
     patch = {}
-    if logo_url is not None: patch["logo_url"] = logo_url
-    if receipt_header is not None: patch["receipt_header"] = receipt_header
-    if receipt_footer is not None: patch["receipt_footer"] = receipt_footer
-    if tin is not None: patch["tin"] = tin
-    if business_reg_no is not None: patch["business_reg_no"] = business_reg_no
+    if logo_url is not None:
+        patch["logo_url"] = logo_url
+    if receipt_header is not None:
+        patch["receipt_header"] = receipt_header
+    if receipt_footer is not None:
+        patch["receipt_footer"] = receipt_footer
+    if tin is not None:
+        patch["tin"] = tin
+    if business_reg_no is not None:
+        patch["business_reg_no"] = business_reg_no
     if not patch:
         return False
     patch["updated_at"] = datetime.utcnow()
@@ -171,16 +181,10 @@ def update_branding(tenant_id, logo_url=None, receipt_header=None,
     return True
 
 
-# ---------------------------------------------------------------------------
-# Tier change workflow
-# ---------------------------------------------------------------------------
-
 def set_pending_tier(tenant_id, tier):
-    """
-    Record an *intended* tier change. Does NOT alter the active tier.
-    The pending tier is only promoted once payment succeeds.
-    """
     from flask import current_app
+    from app.services import entitlement_service
+
     if tier not in current_app.config["PRICING_TIERS"]:
         return False
     _id = oid(tenant_id)
@@ -190,10 +194,15 @@ def set_pending_tier(tenant_id, tier):
     if not tenant:
         return False
 
-    # If they picked their own tier, clear any stale pending change
-    if tier == tenant.get("tier"):
+    current_tier = tenant.get("tier")
+    if tier == current_tier:
         mongo.db.tenants.update_one({"_id": _id}, {"$set": {"pending_tier": None}})
         return True
+
+    if _tier_rank(tier) < _tier_rank(current_tier):
+        ok, msg = entitlement_service.can_downgrade_to(_id, tier)
+        if not ok:
+            return False
 
     mongo.db.tenants.update_one({"_id": _id}, {"$set": {"pending_tier": tier}})
     return True
@@ -208,8 +217,9 @@ def clear_pending_tier(tenant_id):
 
 
 def apply_pending_tier(tenant_id):
-    """Promote pending_tier -> tier. Called on successful payment."""
     from flask import current_app
+    from app.services import entitlement_service
+
     _id = oid(tenant_id)
     if not _id:
         return False
@@ -220,6 +230,24 @@ def apply_pending_tier(tenant_id):
     tiers = current_app.config["PRICING_TIERS"]
     if not pending or pending not in tiers:
         return False
+
+    current_tier = tenant.get("tier", "pro")
+    if _tier_rank(pending) < _tier_rank(current_tier):
+        ok, msg = entitlement_service.can_downgrade_to(_id, pending)
+        if not ok:
+            mongo.db.tenants.update_one(
+                {"_id": _id},
+                {"$set": {"pending_tier": None}},
+            )
+            mongo.db.subscription_events.insert_one({
+                "tenant_id": _id,
+                "event_type": "downgrade_blocked",
+                "from_tier": current_tier,
+                "to_tier": pending,
+                "reason": msg,
+                "created_at": datetime.utcnow(),
+            })
+            return False
 
     amount = float(tiers[pending]["amount"])
     mongo.db.tenants.update_one(
@@ -240,7 +268,15 @@ def apply_pending_tier(tenant_id):
     return True
 
 
-# Backwards-compatible name. Kept for any code paths that already call it.
+def _tier_rank(tier):
+    from flask import current_app
+    order = current_app.config.get("TIER_ORDER", [])
+    try:
+        return order.index(tier)
+    except ValueError:
+        return 0
+
+
 def change_tier(tenant_id, tier):
     """Deprecated: use set_pending_tier + apply_pending_tier instead."""
     return set_pending_tier(tenant_id, tier)

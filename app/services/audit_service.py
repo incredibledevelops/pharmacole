@@ -1,8 +1,44 @@
 from datetime import datetime
 from flask import request, has_request_context, g
 from flask_login import current_user
+
 from extensions import mongo
 from utils import oid, client_ip, device_fingerprint
+
+
+def _resolve_actor(tenant_id, actor_id, actor_role, branch_id):
+    """
+    Fill in missing actor / tenant / branch from the request context.
+    Priority:
+      1. Explicit arguments (caller knows best)
+      2. Flask-Login current_user   (browser session)
+      3. g.api_user / g.api_tenant  (JWT bearer, stateless)
+    """
+    # --- JWT path first if Flask-Login isn't authenticated ---------------
+    api_user = getattr(g, "api_user", None) if has_request_context() else None
+    api_tenant = getattr(g, "api_tenant", None) if has_request_context() else None
+
+    if actor_id is None and api_user is not None and getattr(api_user, "_id", None):
+        actor_id = oid(api_user._id)
+        actor_role = actor_role or getattr(api_user, "role", None)
+        if tenant_id is None and getattr(api_user, "tenant_id", None):
+            tenant_id = oid(api_user.tenant_id)
+        if branch_id is None and getattr(api_user, "branch_id", None):
+            branch_id = oid(api_user.branch_id)
+        # If g.api_tenant exists and tenant_id is still empty, use it.
+        if tenant_id is None and api_tenant is not None:
+            tenant_id = oid(getattr(api_tenant, "_id", None))
+
+    # --- Flask-Login path ------------------------------------------------
+    if actor_id is None and current_user and getattr(current_user, "is_authenticated", False):
+        actor_id = oid(current_user._id)
+        actor_role = actor_role or current_user.role
+        if tenant_id is None and current_user.tenant_id:
+            tenant_id = oid(current_user.tenant_id)
+        if branch_id is None and getattr(current_user, "branch_id", None):
+            branch_id = oid(current_user.branch_id)
+
+    return tenant_id, actor_id, actor_role, branch_id
 
 
 def log(action: str, tenant_id=None, target=None, meta=None,
@@ -16,13 +52,9 @@ def log(action: str, tenant_id=None, target=None, meta=None,
         else:
             ip = fp = ua = None
 
-        if actor_id is None and current_user and getattr(current_user, "is_authenticated", False):
-            actor_id = oid(current_user._id)
-            actor_role = actor_role or current_user.role
-            if tenant_id is None and current_user.tenant_id:
-                tenant_id = oid(current_user.tenant_id)
-            if branch_id is None and getattr(current_user, "branch_id", None):
-                branch_id = oid(current_user.branch_id)
+        tenant_id, actor_id, actor_role, branch_id = _resolve_actor(
+            tenant_id, actor_id, actor_role, branch_id
+        )
 
         mongo.db.audit_logs.insert_one({
             "actor_id": actor_id,
@@ -82,9 +114,12 @@ def query(tenant_id, *, action=None, actor_id=None, branch_id=None,
     items = []
     for d in cur:
         d["_id"] = str(d["_id"])
-        if d.get("actor_id"): d["actor_id"] = str(d["actor_id"])
-        if d.get("tenant_id"): d["tenant_id"] = str(d["tenant_id"])
-        if d.get("branch_id"): d["branch_id"] = str(d["branch_id"])
+        if d.get("actor_id"):
+            d["actor_id"] = str(d["actor_id"])
+        if d.get("tenant_id"):
+            d["tenant_id"] = str(d["tenant_id"])
+        if d.get("branch_id"):
+            d["branch_id"] = str(d["branch_id"])
         d["created_at"] = d.get("created_at").isoformat() if d.get("created_at") else None
         items.append(d)
     return {"items": items, "total": total}

@@ -1,9 +1,18 @@
+import re
 import secrets
 import string
 from datetime import datetime, timedelta
+from pymongo.errors import DuplicateKeyError
+
 from extensions import mongo
 from utils import oid, to_float, to_int
 from app.services import audit_service
+
+
+class IdempotentReplay(Exception):
+    def __init__(self, existing):
+        self.existing = existing
+        super().__init__("Already recorded")
 
 
 def _generate_receipt_no():
@@ -15,22 +24,21 @@ def _generate_receipt_no():
 def record_sale(tenant_id, cashier, items, payment_method,
                 branch_id=None, client_uuid=None,
                 customer_name=None, discount=0.0):
-    """items: [{id, name, price, qty}]. Idempotent when client_uuid is sent."""
     tid = oid(tenant_id)
     if not tid:
         raise ValueError("Invalid tenant")
-
     if not items:
         raise ValueError("Cart is empty")
-
     if payment_method not in ("cash", "card", "momo"):
         raise ValueError("Invalid payment method")
 
-    # Offline idempotency
+    if client_uuid is not None:
+        client_uuid = str(client_uuid).strip() or None
+
     if client_uuid:
         existing = mongo.db.sales.find_one({"tenant_id": tid, "client_uuid": client_uuid})
         if existing:
-            return _sale_to_dict(existing)
+            raise IdempotentReplay(existing)
 
     clean_items = []
     subtotal = 0.0
@@ -94,7 +102,14 @@ def record_sale(tenant_id, cashier, items, payment_method,
         "payment_method": payment_method,
         "timestamp": datetime.utcnow(),
     }
-    mongo.db.sales.insert_one(sale_doc)
+
+    try:
+        mongo.db.sales.insert_one(sale_doc)
+    except DuplicateKeyError:
+        existing = mongo.db.sales.find_one({"tenant_id": tid, "client_uuid": client_uuid})
+        if existing:
+            raise IdempotentReplay(existing)
+        raise
 
     for line in clean_items:
         mongo.db.inventory.update_one(
@@ -138,16 +153,25 @@ def _sale_to_dict(doc):
     }
 
 
-def list_for_tenant(tenant_id, limit=500, since=None, branch_id=None):
+def list_for_tenant(tenant_id, limit=500, since=None, branch_id=None,
+                    q=None, method=None):
     tid = oid(tenant_id)
     if not tid:
         return []
-    q = {"tenant_id": tid}
+    query = {"tenant_id": tid}
     if since:
-        q["timestamp"] = {"$gte": since}
+        query["timestamp"] = {"$gte": since}
     if branch_id:
-        q["branch_id"] = oid(branch_id)
-    cur = mongo.db.sales.find(q).sort("timestamp", -1).limit(limit)
+        query["branch_id"] = oid(branch_id)
+    if method and method in ("cash", "card", "momo"):
+        query["payment_method"] = method
+    if q:
+        rx = re.compile(re.escape(q.strip()), re.IGNORECASE)
+        query["$or"] = [
+            {"receipt_no": rx},
+            {"cashier_name": rx},
+        ]
+    cur = mongo.db.sales.find(query).sort("timestamp", -1).limit(limit)
     return list(cur)
 
 
@@ -205,11 +229,22 @@ def recent_sales(tenant_id, limit=10, branch_id=None):
     return list_for_tenant(tenant_id, limit=limit, branch_id=branch_id)
 
 
-# NEW — consolidated across branches for Business/Enterprise
 def consolidated_summary(tenant_id):
+    """
+    Per-branch revenue/transaction summary.
+
+    Only includes branches that:
+      - are currently active (`is_active: True`), OR
+      - have at least one sale on record (so a deactivated branch with
+        historical revenue still appears once).
+
+    "All / Unassigned" (null branch_id) is always included when it has sales.
+    """
     tid = oid(tenant_id)
     if not tid:
         return []
+
+    # Group sales by branch.
     pipeline = [
         {"$match": {"tenant_id": tid}},
         {"$group": {
@@ -219,17 +254,40 @@ def consolidated_summary(tenant_id):
         }},
     ]
     rows = list(mongo.db.sales.aggregate(pipeline))
+
+    # Preload branch metadata (name + is_active).
+    branch_ids = [r["_id"] for r in rows if r["_id"]]
+    branches = {}
+    if branch_ids:
+        for b in mongo.db.branches.find(
+            {"_id": {"$in": branch_ids}, "tenant_id": tid},
+            {"name": 1, "is_active": 1},
+        ):
+            branches[b["_id"]] = b
+
     out = []
     for r in rows:
         bid = r["_id"]
-        name = "All / Unassigned"
-        if bid:
-            b = mongo.db.branches.find_one({"_id": bid})
-            name = b.get("name") if b else str(bid)
+        if bid is None:
+            name = "All / Unassigned"
+            is_active = True
+        else:
+            b = branches.get(bid)
+            if not b:
+                # Sale references a branch that no longer exists.
+                # Skip it — it would confuse "active branch" reporting.
+                continue
+            name = b.get("name") or str(bid)
+            is_active = bool(b.get("is_active", True))
+
         out.append({
             "branch_id": str(bid) if bid else None,
             "branch_name": name,
+            "is_active": is_active,
             "revenue": float(r["revenue"]),
             "transactions": int(r["count"]),
         })
+
+    # Active branches first, then by revenue desc.
+    out.sort(key=lambda x: (not x["is_active"], -x["revenue"]))
     return out

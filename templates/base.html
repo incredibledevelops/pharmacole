@@ -15,20 +15,12 @@
   <meta property="og:url" content="{{ request.url }}">
   <meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
 
-  <!-- PWA: register service worker + push -->
+  <!-- PWA meta (the SW itself is registered from the authenticated base templates,
+       never from public/auth pages — this prevents caching of login/checkout pages
+       across users on shared devices). -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="mobile-web-app-capable" content="yes">
-  <script>
-    (function () {
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/pwa/service-worker.js', { scope: '/' })
-          .catch((err) => console.warn('SW registration failed', err));
-        });
-      }
-    })();
-  </script>
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{% block tw_title %}Pharmacole · Multi-tenant Pharmacy SaaS{% endblock %}">
@@ -191,7 +183,8 @@
   </style>
   {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-100 font-sans antialiased">
+<body class="bg-gray-100 font-sans antialiased"
+      data-authed="{{ '1' if current_user.is_authenticated else '0' }}">
 
 {% include "_flashes.html" %}
 

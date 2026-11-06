@@ -55,6 +55,7 @@ _log = logging.getLogger(__name__)
 
 _SUBMODULES = [
     "auth",
+    "meta",
     "branches",
     "inventory",
     "sales",

@@ -8,10 +8,46 @@
   var cart = Array.isArray(cfg.initialCart) ? cfg.initialCart.slice() : [];
   var method = "cash";
   var $ = function (id) { return document.getElementById(id); };
+  var offline = window.OfflinePOS;
 
   function money(n) { return "GH\u20B5 " + Number(n).toFixed(2); }
 
-  // Add product on click (event delegation)
+  /* ---------- Sync status pill ---------- */
+  var syncStatusBtn = $("syncStatus");
+  var syncStatusText = $("syncStatusText");
+
+  function setSyncStatus(state, queued) {
+    if (!syncStatusBtn || !syncStatusText) return;
+    var online = state === "online";
+    var label = online ? "Online" : "Offline";
+    if (queued && queued > 0) label += " · " + queued + " queued";
+    syncStatusText.textContent = label;
+    syncStatusBtn.classList.remove(
+      "bg-emerald-50", "text-emerald-700", "border-emerald-200",
+      "bg-amber-50", "text-amber-700", "border-amber-200"
+    );
+    if (online && !queued) {
+      syncStatusBtn.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-200");
+    } else {
+      syncStatusBtn.classList.add("bg-amber-50", "text-amber-700", "border-amber-200");
+    }
+  }
+
+  async function refreshSyncStatus() {
+    try {
+      var queued = offline ? (await offline.all()).length : 0;
+      setSyncStatus(offline && offline.isOnline() ? "online" : "offline", queued);
+    } catch (e) {}
+  }
+
+  window.addEventListener("online", refreshSyncStatus);
+  window.addEventListener("offline", refreshSyncStatus);
+  if (offline) {
+    offline.subscribe(function () { refreshSyncStatus(); });
+  }
+  refreshSyncStatus();
+
+  /* ---------- Add product on click (event delegation) ---------- */
   var grid = $("productGrid");
   if (grid) {
     grid.addEventListener("click", function (e) {
@@ -20,14 +56,20 @@
       var id = card.dataset.id;
       var name = card.dataset.name;
       var price = parseFloat(card.dataset.price);
+      var stock = parseInt(card.dataset.stock, 10) || 0;
       var found = cart.find(function (i) { return i.id === id; });
-      if (found) found.qty += 1;
+      var newQty = (found ? found.qty : 0) + 1;
+      if (newQty > stock) {
+        window.showPosToast && window.showPosToast("Only " + stock + " in stock", "warn");
+        return;
+      }
+      if (found) found.qty = newQty;
       else cart.push({ id: id, name: name, price: price, qty: 1 });
       render();
     });
   }
 
-  // Search filter
+  /* ---------- Search filter (unchanged) ---------- */
   var search = $("posSearch");
   if (search) {
     search.addEventListener("input", function (e) {
@@ -38,7 +80,7 @@
     });
   }
 
-  // Payment method
+  /* ---------- Payment method ---------- */
   document.querySelectorAll(".pm").forEach(function (btn) {
     btn.addEventListener("click", function () {
       document.querySelectorAll(".pm").forEach(function (x) {
@@ -93,17 +135,26 @@
     $("cartCount").textContent = cart.reduce(function (s, i) { return s + i.qty; }, 0);
 
     c.querySelectorAll(".plus").forEach(function (b) {
-      b.onclick = function () { cart[b.dataset.i].qty += 1; render(); };
+      b.onclick = function () {
+        var idx = parseInt(b.dataset.i, 10);
+        cart[idx].qty += 1;
+        render();
+      };
     });
     c.querySelectorAll(".minus").forEach(function (b) {
       b.onclick = function () {
-        cart[b.dataset.i].qty -= 1;
-        if (cart[b.dataset.i].qty <= 0) cart.splice(b.dataset.i, 1);
+        var idx = parseInt(b.dataset.i, 10);
+        cart[idx].qty -= 1;
+        if (cart[idx].qty <= 0) cart.splice(idx, 1);
         render();
       };
     });
     c.querySelectorAll(".del").forEach(function (b) {
-      b.onclick = function () { cart.splice(b.dataset.i, 1); render(); };
+      b.onclick = function () {
+        var idx = parseInt(b.dataset.i, 10);
+        cart.splice(idx, 1);
+        render();
+      };
     });
   }
 
@@ -113,13 +164,13 @@
     });
   }
 
-  // Clear
+  /* ---------- Clear ---------- */
   $("clearCartBtn").onclick = function () {
     if (!cart.length) return;
     if (confirm("Clear the current order?")) { cart.length = 0; render(); }
   };
 
-  // Hold
+  /* ---------- Hold ---------- */
   $("holdBtn").onclick = function () {
     if (!cart.length) { alert("Cart is empty."); return; }
     var label = prompt("Label for held order (optional):", "");
@@ -133,7 +184,7 @@
         "Accept": "application/json",
         "X-CSRFToken": cfg.csrfToken
       },
-      body: JSON.stringify({ items: cart, label: label })
+      body: JSON.stringify({ items: cart, label: label, branch_id: cfg.branchId || null })
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -145,11 +196,42 @@
     .catch(function () { alert("Could not hold order. Please try again."); });
   };
 
-  // Charge
+  /* ---------- Build a payload from the cart ---------- */
+  function buildPayload(clientUuid) {
+    var customer = (document.getElementById("posCustomer") || {}).value || "";
+    var discountInput = document.getElementById("posDiscount");
+    var discountPct = discountInput ? parseFloat(discountInput.value) || 0 : 0;
+    var sub = cart.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
+    var vat = sub * 0.05;
+    var total = sub + vat;
+    var discountAmount = total * (discountPct / 100);
+
+    return {
+      items: cart,
+      payment_method: method,
+      client_uuid: clientUuid,
+      branch_id: cfg.branchId || null,
+      customer_name: customer || null,
+      discount: discountAmount
+    };
+  }
+
+  /* ---------- Charge ---------- */
   $("chargeBtn").onclick = function () {
     if (!cart.length) { alert("Cart is empty"); return; }
-    $("chargeBtn").disabled = true;
-    $("chargeBtn").innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    var clientUuid = offline ? offline.uuid() : null;
+    var payload = buildPayload(clientUuid);
+
+    var btn = $("chargeBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    // If we already know we're offline, queue immediately.
+    if (offline && !offline.isOnline()) {
+      queueOffline(payload);
+      return;
+    }
 
     fetch(cfg.checkoutUrl, {
       method: "POST",
@@ -159,7 +241,7 @@
         "Accept": "application/json",
         "X-CSRFToken": cfg.csrfToken
       },
-      body: JSON.stringify({ items: cart, payment_method: method })
+      body: JSON.stringify(payload)
     })
     .then(function (r) {
       var ct = r.headers.get("content-type") || "";
@@ -168,6 +250,7 @@
     })
     .then(function (data) {
       if (data.error) {
+        // Stock validation failed → don't queue, surface the error.
         alert(data.error);
         resetChargeBtn();
         return;
@@ -177,34 +260,55 @@
       render();
     })
     .catch(function () {
-      alert("Network error. Please try again.");
-      resetChargeBtn();
+      // Network error → persist locally and sync later.
+      if (offline) {
+        queueOffline(payload);
+      } else {
+        alert("Network error. Please try again.");
+        resetChargeBtn();
+      }
     });
   };
 
+  function queueOffline(payload) {
+    offline.enqueue(payload).then(function () {
+      window.showPosToast && window.showPosToast("Saved offline — will sync automatically", "warn");
+      cart.length = 0;
+      render();
+      resetChargeBtn();
+      refreshSyncStatus();
+    }).catch(function () {
+      alert("Could not save offline. Please retry when back online.");
+      resetChargeBtn();
+    });
+  }
+
   function resetChargeBtn() {
-    $("chargeBtn").disabled = false;
-    $("chargeBtn").innerHTML = '<i class="fas fa-check-circle"></i> Charge';
+    var btn = $("chargeBtn");
+    if (!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check-circle"></i> Charge';
   }
 
   function showReceipt(data) {
+    var items = (data.items || []).map(function (i) {
+      return '<div class="flex justify-between text-xs">'
+        + '<span class="text-gray-600">' + escapeHtml(i.name) + ' × ' + i.qty + '</span>'
+        + '<span class="font-medium">' + money(i.line_subtotal) + '</span>'
+        + '</div>';
+    }).join("");
+
     var html = ''
       + '<p class="text-center text-xs text-gray-400 mb-3">'
       +   'Receipt <span class="font-medium text-gray-600">' + escapeHtml(data.receipt_no) + '</span><br>'
       +   new Date().toLocaleString() + '<br>'
       +   'Cashier: ' + escapeHtml(cfg.cashierName)
       + '</p>'
-      + '<div class="border-t border-b border-dashed border-gray-200 py-3 my-2 space-y-1">'
-      +   data.items.map(function (i) {
-            return '<div class="flex justify-between text-xs">'
-              + '<span class="text-gray-600">' + escapeHtml(i.name) + ' × ' + i.qty + '</span>'
-              + '<span class="font-medium">' + money(i.line_subtotal) + '</span>'
-              + '</div>';
-          }).join("")
-      + '</div>'
+      + '<div class="border-t border-b border-dashed border-gray-200 py-3 my-2 space-y-1">' + items + '</div>'
       + '<div class="space-y-1 text-xs">'
       +   '<div class="flex justify-between text-gray-500"><span>Subtotal</span><span>' + money(data.subtotal) + '</span></div>'
       +   '<div class="flex justify-between text-gray-500"><span>VAT</span><span>' + money(data.vat) + '</span></div>'
+      +   (data.discount ? '<div class="flex justify-between text-rose-500"><span>Discount</span><span>-' + money(data.discount) + '</span></div>' : '')
       +   '<div class="flex justify-between text-base font-bold text-gray-800 pt-2 border-t border-gray-200 mt-2">'
       +     '<span>Total</span><span class="text-primary">' + money(data.total) + '</span>'
       +   '</div>'

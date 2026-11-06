@@ -23,10 +23,10 @@
 
   {% if items %}
 
-  <!-- Stats strip -->
-  {% set low_count = items|selectattr('quantity','le',items[0].min_threshold)|list|length %}
+  {# Server computes low_count / expiring_count with each item's OWN min_threshold. #}
   {% set healthy_count = items|length - low_count %}
 
+  <!-- Stats strip -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
     <div class="group relative bg-white rounded-2xl p-4 shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
       <div class="absolute -top-8 -right-8 w-24 h-24 bg-gradient-to-br from-teal-400 to-emerald-400 opacity-10 rounded-full group-hover:opacity-20 transition"></div>
@@ -59,7 +59,7 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Expiring ≤30d</p>
           <i class="fas fa-clock text-rose-500 text-sm"></i>
         </div>
-        <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ expiring_count if expiring_count is defined else 0 }}</p>
+        <p class="text-2xl font-extrabold text-rose-600 mt-1">{{ expiring_count }}</p>
         <p class="text-[11px] text-gray-400 mt-0.5">Needs attention</p>
       </div>
     </div>
@@ -85,13 +85,13 @@
           <i class="fas fa-layer-group mr-1 text-[10px]"></i> All <span class="chip-count ml-1 opacity-80" data-count="all">{{ items|length }}</span>
         </button>
         <button data-filter="low" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-          <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-amber-500"></i> Low <span class="chip-count ml-1 text-gray-400" data-count="low">0</span>
+          <i class="fas fa-triangle-exclamation mr-1 text-[10px] text-amber-500"></i> Low <span class="chip-count ml-1 text-gray-400" data-count="low">{{ low_count }}</span>
         </button>
         <button data-filter="expiring" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-          <i class="fas fa-clock mr-1 text-[10px] text-rose-500"></i> Expiring <span class="chip-count ml-1 text-gray-400" data-count="expiring">0</span>
+          <i class="fas fa-clock mr-1 text-[10px] text-rose-500"></i> Expiring <span class="chip-count ml-1 text-gray-400" data-count="expiring">{{ expiring_count }}</span>
         </button>
         <button data-filter="healthy" class="filter-chip bg-white border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap flex-shrink-0 hover:border-primary hover:text-primary transition-all">
-          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Healthy <span class="chip-count ml-1 text-gray-400" data-count="healthy">0</span>
+          <i class="fas fa-circle-check mr-1 text-[10px] text-emerald-500"></i> Healthy <span class="chip-count ml-1 text-gray-400" data-count="healthy">{{ healthy_count }}</span>
         </button>
       </div>
 
@@ -303,7 +303,7 @@
       {% endfor %}
     </div>
 
-    <!-- No results (search/filter) -->
+    <!-- No results -->
     <div id="invNoResults" class="hidden py-14 px-4 text-center text-gray-400">
       <div class="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
         <i class="fas fa-search text-2xl text-gray-300"></i>

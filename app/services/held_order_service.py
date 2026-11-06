@@ -2,13 +2,20 @@ from datetime import datetime
 from extensions import mongo
 from utils import oid
 
+_BRANCH_ANY = object()
 
-def hold(tenant_id, cashier, items, label=None):
+
+def hold(tenant_id, cashier, items, label=None, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
         raise ValueError("Invalid tenant")
     if not items:
         raise ValueError("Cart is empty")
+
+    # Resolve branch: explicit wins, otherwise use the cashier's assigned branch
+    bid = oid(branch_id) if branch_id else None
+    if bid is None and cashier is not None:
+        bid = oid(getattr(cashier, "branch_id", None))
 
     total = 0.0
     clean = []
@@ -27,6 +34,7 @@ def hold(tenant_id, cashier, items, label=None):
 
     doc = {
         "tenant_id": tid,
+        "branch_id": bid,
         "cashier_id": oid(cashier._id) if cashier else None,
         "cashier_name": getattr(cashier, "name", "—") if cashier else "—",
         "label": (label or "").strip() or f"Held {datetime.utcnow():%H:%M}",
@@ -37,13 +45,16 @@ def hold(tenant_id, cashier, items, label=None):
     return mongo.db.held_orders.insert_one(doc).inserted_id
 
 
-def list_for_tenant(tenant_id, limit=100):
+def list_for_tenant(tenant_id, limit=100, branch_id=_BRANCH_ANY):
     tid = oid(tenant_id)
     if not tid:
         return []
+    q = {"tenant_id": tid}
+    if branch_id is not _BRANCH_ANY:
+        q["branch_id"] = oid(branch_id) if branch_id else None
     cur = (
         mongo.db.held_orders
-        .find({"tenant_id": tid})
+        .find(q)
         .sort("created_at", -1)
         .limit(limit)
     )

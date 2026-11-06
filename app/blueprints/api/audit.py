@@ -6,6 +6,15 @@ from decorators import token_required, api_role_required, api_subscription_requi
 from app.services import audit_service
 
 
+def _parse(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", ""))
+    except Exception:
+        return None
+
+
 @api_bp.route("/audit", methods=["GET"])
 @token_required
 @api_role_required("owner", "super_admin")
@@ -17,16 +26,14 @@ def search_audit():
     q = request.args.get("q")
     date_from = request.args.get("from")
     date_to = request.args.get("to")
-    limit = int(request.args.get("limit", 200))
-    skip = int(request.args.get("skip", 0))
-
-    def _parse(s):
-        if not s:
-            return None
-        try:
-            return datetime.fromisoformat(s.replace("Z", ""))
-        except Exception:
-            return None
+    try:
+        limit = int(request.args.get("limit", 200))
+    except (TypeError, ValueError):
+        limit = 200
+    try:
+        skip = int(request.args.get("skip", 0))
+    except (TypeError, ValueError):
+        skip = 0
 
     result = audit_service.query(
         g.api_user.tenant_id,

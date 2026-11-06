@@ -7,9 +7,10 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
-from models import find_tenant_by_id
+from models import find_tenant_by_id, find_tenant_by_code
 from app.services import tenant_service, auth_service
 from extensions import mongo
+from utils import oid
 
 
 main_bp = Blueprint("main", __name__)
@@ -26,7 +27,6 @@ def landing():
 
 @main_bp.route("/dashboard")
 def redirect_dashboard():
-    """Single entry point: send each role to their home page."""
     if not current_user.is_authenticated:
         return redirect(url_for("auth.login"))
 
@@ -84,15 +84,22 @@ def renew_subscription():
         return redirect(url_for("owner.subscription"))
 
     if requested != tenant.tier:
-        # Record intent; do not modify `tier` yet.
-        tenant_service.set_pending_tier(tenant._id, requested)
+        # set_pending_tier refuses excessive downgrades and returns False.
+        ok = tenant_service.set_pending_tier(tenant._id, requested)
+        if not ok:
+            flash(
+                f"Cannot switch to {tiers[requested]['label']} while your "
+                "current usage exceeds that plan's limits. Deactivate extra "
+                "branches or users first.",
+                "danger",
+            )
+            return redirect(url_for("owner.subscription"))
         flash(
             f"Ready to switch to {tiers[requested]['label']}. "
             "Complete payment to activate the new plan.",
             "info",
         )
     else:
-        # Same tier — renewal only; clear any stale pending change.
         tenant_service.clear_pending_tier(tenant._id)
         flash(
             f"You're renewing the {tiers[requested]['label']} plan. "
@@ -105,7 +112,6 @@ def renew_subscription():
 
 @main_bp.route("/subscription/cancel-pending", methods=["POST"])
 def cancel_pending_tier():
-    """Explicit 'I changed my mind' — clear the pending tier."""
     if not current_user.is_authenticated:
         return redirect(url_for("auth.login"))
     if current_user.role != "owner":
@@ -127,9 +133,17 @@ def cancel_pending_tier():
 @login_required
 def session_token():
     tokens = auth_service.issue_tokens(current_user)
+
+    tenant_code = None
+    if current_user.tenant_id:
+        t = find_tenant_by_id(current_user.tenant_id)
+        tenant_code = t.tenant_code if t else None
+
     resp = jsonify({
         "access": tokens["access"],
         "expires_in": tokens["expires_in"],
+        "api_base": "/api/v1",
+        "tenant_code": tenant_code,
     })
     # Never cache a bearer token
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
@@ -138,18 +152,68 @@ def session_token():
 
 
 # ---------------------------------------------------------------------------
-# Public receipt verification
+# Public receipt verification (tenant-scoped)
 # ---------------------------------------------------------------------------
 
 @main_bp.route("/r/<receipt_no>")
 def verify_receipt_page(receipt_no):
-    # Normalize: receipts are generated uppercase (RCP-…) but users may type
-    # them in any case or paste with stray whitespace.
+    """
+    Public receipt-verification page used by the QR on printed receipts.
+
+    Lookup is tenant-scoped. Accepts:
+      1. `?tenant=GH-XXXXXX` (preferred)
+      2. A combined key of the form `GH-XXXXXX-RCP-…`
+      3. Ambiguous fallback: only if EXACTLY one sale matches across all
+         tenants — otherwise 404 (never leak which tenant matched).
+    """
+    tenant_code = (request.args.get("tenant") or "").strip().upper()
     normalized = (receipt_no or "").strip().upper()
-    sale = mongo.db.sales.find_one({"receipt_no": normalized})
+
+    if not normalized:
+        abort(404)
+
+    sale = None
+    tenant = None
+
+    # Case 1: explicit tenant param.
+    if tenant_code:
+        tenant = find_tenant_by_code(tenant_code)
+        if tenant:
+            sale = mongo.db.sales.find_one({
+                "tenant_id": oid(tenant._id),
+                "receipt_no": normalized,
+            })
+
+    # Case 2: tenant code embedded in the receipt string (GH-XXXXXX-...).
+    if sale is None and not tenant_code:
+        if normalized.startswith("GH-") and len(normalized) > 9 and normalized[9] == "-":
+            tenant = find_tenant_by_code(normalized[:9])
+            if tenant:
+                sale = mongo.db.sales.find_one({
+                    "tenant_id": oid(tenant._id),
+                    "receipt_no": normalized[10:],
+                })
+
+    # Case 3: unambiguous global match — safe because only 1 match means
+    # there's no cross-tenant leak. We then load the full doc so the
+    # template can render real fields (Phase 1 had a projection bug here).
+    if sale is None:
+        matches = list(mongo.db.sales.find(
+            {"receipt_no": normalized},
+            {"_id": 1},
+        ).limit(2))
+        if len(matches) == 1:
+            sale = mongo.db.sales.find_one({"_id": matches[0]["_id"]})
+
     if not sale:
         abort(404)
-    return render_template("receipt_verify.html", sale=sale)
+
+    # Resolve the issuing tenant for the template (nice-to-have: show the
+    # pharmacy name on the verification page).
+    if tenant is None and sale.get("tenant_id"):
+        tenant = find_tenant_by_id(sale["tenant_id"])
+
+    return render_template("receipt_verify.html", sale=sale, tenant=tenant)
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +225,7 @@ def healthz():
     try:
         mongo.db.command("ping")
         return {"status": "ok", "time": datetime.utcnow().isoformat()}, 200
-    except Exception as e:
-        # Log the real reason server-side; don't leak internals to the caller.
+    except Exception:
         current_app.logger.exception("Health check failed")
         return {"status": "degraded"}, 503
 
@@ -172,7 +235,6 @@ def robots_txt():
     try:
         return send_from_directory(current_app.static_folder, "robots.txt")
     except Exception:
-        # Fail soft — a missing robots.txt should never 500 the site.
         return make_response("User-agent: *\nAllow: /\n", 200, {
             "Content-Type": "text/plain; charset=utf-8",
         })
@@ -182,12 +244,10 @@ def robots_txt():
 def sitemap_xml():
     try:
         return send_from_directory(
-            current_app.static_folder,
-            "sitemap.xml",
+            current_app.static_folder, "sitemap.xml",
             mimetype="application/xml",
         )
     except Exception:
-        # Minimal fallback so crawlers still get a valid document.
         body = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -200,24 +260,21 @@ def sitemap_xml():
 
 @main_bp.route("/favicon.ico")
 def favicon():
-    """Prevent 404 noise in server logs — the browser always asks for this."""
     try:
         return send_from_directory(
             current_app.static_folder, "favicon.ico",
             mimetype="image/vnd.microsoft.icon",
         )
     except Exception:
-        # If the file is missing, return an empty 204 rather than a 404.
         return ("", 204)
 
 
 # ---------------------------------------------------------------------------
-# Friendly fallbacks — common typos that shouldn't dump users on a 404
+# Trailing-slash normalization
 # ---------------------------------------------------------------------------
 
 @main_bp.route("/dashboard/", strict_slashes=False, endpoint="dashboard_slash")
 def _dashboard_slash():
-    """Someone typed /dashboard/ with a trailing slash — normalize."""
     return redirect(url_for("main.redirect_dashboard"))
 
 

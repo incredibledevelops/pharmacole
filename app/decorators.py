@@ -1,10 +1,10 @@
 from functools import wraps
 from datetime import datetime
-from flask import redirect, url_for, flash, abort, request, g, jsonify
+from flask import redirect, url_for, flash, request, g, jsonify
 from flask_login import current_user
 
 from extensions import mongo
-from utils import oid
+from utils import oid, _coerce_dt
 from app.services.entitlement_service import (
     feature_required,
     api_feature_required,
@@ -61,17 +61,10 @@ def subscription_required(f):
         if tenant.get("subscription_status") != "active":
             return redirect(url_for("main.subscription_locked"))
 
-        expires = tenant.get("subscription_expires_at")
+        expires = _coerce_dt(tenant.get("subscription_expires_at"))
         if expires is None:
             _mark_expired(tenant_id)
             return redirect(url_for("main.subscription_locked"))
-
-        if isinstance(expires, str):
-            try:
-                expires = datetime.fromisoformat(expires.replace("Z", ""))
-            except Exception:
-                _mark_expired(tenant_id)
-                return redirect(url_for("main.subscription_locked"))
 
         if expires < datetime.utcnow():
             _mark_expired(tenant_id)
@@ -149,17 +142,26 @@ def api_subscription_required(f):
             return f(*args, **kwargs)
         if not tenant:
             return jsonify({"error": "Tenant not found"}), 403
+
         if tenant.subscription_status != "active":
             return jsonify({
                 "error": "Subscription inactive",
                 "code": "subscription_locked",
             }), 402
-        exp = tenant.subscription_expires_at
-        if isinstance(exp, datetime) and exp < datetime.utcnow():
+
+        exp = _coerce_dt(tenant.subscription_expires_at)
+        if exp is not None and exp < datetime.utcnow():
+            # Mark expired in background (best-effort, same as browser path).
+            try:
+                from utils import oid as _oid
+                _mark_expired(_oid(tenant._id))
+            except Exception:
+                pass
             return jsonify({
                 "error": "Subscription expired",
                 "code": "subscription_locked",
             }), 402
+
         return f(*args, **kwargs)
     return wrapper
 

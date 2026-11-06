@@ -4,6 +4,10 @@ from utils import oid, to_float, to_int
 from app.services import audit_service
 
 
+# Sentinel: distinguish "no branch filter" (default) from "branch_id is None"
+_BRANCH_ANY = object()
+
+
 def create_item(tenant_id, data, branch_id=None):
     tid = oid(tenant_id)
     if not tid:
@@ -20,7 +24,7 @@ def create_item(tenant_id, data, branch_id=None):
 
     doc = {
         "tenant_id": tid,
-        "branch_id": oid(branch_id) if branch_id else None,  # NEW
+        "branch_id": oid(branch_id) if branch_id else None,
         "name": name,
         "sku": sku,
         "category": (data.get("category") or "").strip() or None,
@@ -49,13 +53,26 @@ def create_item(tenant_id, data, branch_id=None):
     return res.inserted_id
 
 
-def list_for_tenant(tenant_id, search=None, limit=1000, branch_id=None):
+def list_for_tenant(tenant_id, search=None, limit=1000, branch_id=_BRANCH_ANY):
+    """
+    List inventory for a tenant.
+
+    branch_id:
+      - omitted          → all branches (owner/dashboard default)
+      - ObjectId/str     → that specific branch
+      - None (explicit)  → only docs with branch_id = None (legacy / unassigned)
+    """
     tid = oid(tenant_id)
     if not tid:
         return []
     q = {"tenant_id": tid}
-    if branch_id:
-        q["branch_id"] = oid(branch_id)
+
+    if branch_id is not _BRANCH_ANY:
+        if branch_id:
+            q["branch_id"] = oid(branch_id)
+        else:
+            q["branch_id"] = None
+
     if search:
         s = search.strip()
         q["$or"] = [
@@ -74,23 +91,23 @@ def get_item(tenant_id, item_id):
     return mongo.db.inventory.find_one({"_id": iid, "tenant_id": tid})
 
 
-def count_for_tenant(tenant_id, branch_id=None):
+def count_for_tenant(tenant_id, branch_id=_BRANCH_ANY):
     tid = oid(tenant_id)
     if not tid:
         return 0
     q = {"tenant_id": tid}
-    if branch_id:
-        q["branch_id"] = oid(branch_id)
+    if branch_id is not _BRANCH_ANY:
+        q["branch_id"] = oid(branch_id) if branch_id else None
     return mongo.db.inventory.count_documents(q)
 
 
-def low_stock(tenant_id, limit=50, branch_id=None):
+def low_stock(tenant_id, limit=50, branch_id=_BRANCH_ANY):
     tid = oid(tenant_id)
     if not tid:
         return []
     match = {"tenant_id": tid}
-    if branch_id:
-        match["branch_id"] = oid(branch_id)
+    if branch_id is not _BRANCH_ANY:
+        match["branch_id"] = oid(branch_id) if branch_id else None
     pipeline = [
         {"$match": match},
         {"$match": {"$expr": {"$lte": ["$quantity", "$min_threshold"]}}},
@@ -100,7 +117,7 @@ def low_stock(tenant_id, limit=50, branch_id=None):
     return list(mongo.db.inventory.aggregate(pipeline))
 
 
-def expiring_within(tenant_id, days=30, limit=200, branch_id=None):
+def expiring_within(tenant_id, days=30, limit=200, branch_id=_BRANCH_ANY):
     tid = oid(tenant_id)
     if not tid:
         return []
@@ -111,14 +128,14 @@ def expiring_within(tenant_id, days=30, limit=200, branch_id=None):
         "expiry_date": {"$gte": cutoff, "$lte": horizon},
         "quantity": {"$gt": 0},
     }
-    if branch_id:
-        q["branch_id"] = oid(branch_id)
+    if branch_id is not _BRANCH_ANY:
+        q["branch_id"] = oid(branch_id) if branch_id else None
     cur = mongo.db.inventory.find(q).sort("expiry_date", 1).limit(limit)
     return list(cur)
 
 
 def update_item(tenant_id, item_id, data, actor_id=None):
-    """Update an item and audit price changes."""
+    """Update an item and audit price changes. Rejects invalid expiry."""
     tid = oid(tenant_id)
     iid = oid(item_id)
     if not tid or not iid:
@@ -142,7 +159,19 @@ def update_item(tenant_id, item_id, data, actor_id=None):
             elif k in ("quantity", "min_threshold"):
                 v = to_int(v, 0)
             elif k == "expiry_date":
-                v = _to_dt(v)
+                # Reject non-empty strings that don't parse — silently writing
+                # None breaks expiry filters and `expiring_within`.
+                if isinstance(v, str) and v.strip():
+                    parsed = _to_dt(v)
+                    if not parsed:
+                        raise ValueError(f"Invalid expiry_date: {v!r}")
+                    v = parsed
+                elif v is None or (isinstance(v, str) and not v.strip()):
+                    raise ValueError("Expiry date is required")
+                else:
+                    v = _to_dt(v)
+                    if not v:
+                        raise ValueError("Invalid expiry_date")
             patch[k] = v
 
     if not patch:
@@ -151,7 +180,6 @@ def update_item(tenant_id, item_id, data, actor_id=None):
     patch["updated_at"] = datetime.utcnow()
     mongo.db.inventory.update_one({"_id": iid, "tenant_id": tid}, {"$set": patch})
 
-    # Audit price changes specifically
     for field in ("selling_price", "cost_price"):
         if field in patch and float(existing.get(field, 0)) != float(patch[field]):
             audit_service.log(
