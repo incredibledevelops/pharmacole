@@ -45,7 +45,7 @@ class Config:
     PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY").strip()
     PAYSTACK_BASE_URL = os.getenv("PAYSTACK_BASE_URL", "https://api.paystack.co").rstrip("/")
 
-    BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:5005").rstrip("/")
+    BASE_URL = os.getenv("APP_BASE_URL").rstrip("/")
 
     SUBSCRIPTION_AMOUNT = _float("SUBSCRIPTION_AMOUNT", 500.0)
     SUBSCRIPTION_CURRENCY = os.getenv("SUBSCRIPTION_CURRENCY", "GHS")
@@ -84,7 +84,7 @@ class Config:
     # Email — Resend (replaces SMTP)
     # ------------------------------------------------------------------
     # Leave RESEND_API_KEY empty to disable email sending (calls become no-ops).
-    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY").strip()
     # Must be a verified domain on Resend. Supports "Name <email>" format,
     # e.g. "Pharmacole <receipts@pharmacole.com>".
     RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Pharmacole <receipts@pharmacole.com>")
@@ -100,8 +100,8 @@ class Config:
     # ------------------------------------------------------------------
     # Web push (unchanged — separate from email/SMS)
     # ------------------------------------------------------------------
-    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
-    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
+    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
     VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:support@pharmacole.com")
 
     # Uploads
