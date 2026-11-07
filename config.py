@@ -41,8 +41,8 @@ class Config:
     MONGO_URI = os.getenv("MONGO_URI")
     MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "pharmacole")
 
-    PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "").strip()
-    PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "").strip()
+    PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY").strip()
+    PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY").strip()
     PAYSTACK_BASE_URL = os.getenv("PAYSTACK_BASE_URL", "https://api.paystack.co").rstrip("/")
 
     BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:5005").rstrip("/")
@@ -51,8 +51,8 @@ class Config:
     SUBSCRIPTION_CURRENCY = os.getenv("SUBSCRIPTION_CURRENCY", "GHS")
     SUBSCRIPTION_DURATION_DAYS = _int("SUBSCRIPTION_DURATION_DAYS", 30)
 
-    SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL", "").lower().strip()
-    SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD", "")
+    SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL").lower().strip()
+    SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD")
 
     SESSION_COOKIE_SECURE = _bool("SESSION_COOKIE_SECURE", False)
     SESSION_COOKIE_HTTPONLY = True
