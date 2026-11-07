@@ -114,7 +114,7 @@ class Config:
     PRICING_TIERS = {
         "starter": {
             "label": "Starter",
-            "amount": 300.0,
+            "amount": 500.0,
             "branches": 1,
             "users": 2,
             "tagline": "For a single counter",
@@ -129,7 +129,7 @@ class Config:
         },
         "pro": {
             "label": "Pro",
-            "amount": 500.0,
+            "amount": 800.0,
             "branches": 1,
             "users": -1,
             "tagline": "Most pharmacies",
@@ -149,7 +149,7 @@ class Config:
         },
         "business": {
             "label": "Business",
-            "amount": 1200.0,
+            "amount": 1500.0,
             "branches": 5,
             "users": -1,
             "tagline": "Growing chains",
@@ -168,7 +168,7 @@ class Config:
         },
         "enterprise": {
             "label": "Enterprise",
-            "amount": 2000.0,
+            "amount": 2500.0,
             "branches": -1,
             "users": -1,
             "tagline": "Chains & franchises",
