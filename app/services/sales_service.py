@@ -159,8 +159,11 @@ def list_for_tenant(tenant_id, limit=500, since=None, branch_id=None,
     if not tid:
         return []
     query = {"tenant_id": tid}
-    if since:
+    
+    # Only filter by timestamp if 'since' is a valid datetime
+    if since and isinstance(since, datetime):
         query["timestamp"] = {"$gte": since}
+        
     if branch_id:
         query["branch_id"] = oid(branch_id)
     if method and method in ("cash", "card", "momo"):
@@ -171,6 +174,7 @@ def list_for_tenant(tenant_id, limit=500, since=None, branch_id=None,
             {"receipt_no": rx},
             {"cashier_name": rx},
         ]
+        
     cur = mongo.db.sales.find(query).sort("timestamp", -1).limit(limit)
     return list(cur)
 
@@ -230,21 +234,10 @@ def recent_sales(tenant_id, limit=10, branch_id=None):
 
 
 def consolidated_summary(tenant_id):
-    """
-    Per-branch revenue/transaction summary.
-
-    Only includes branches that:
-      - are currently active (`is_active: True`), OR
-      - have at least one sale on record (so a deactivated branch with
-        historical revenue still appears once).
-
-    "All / Unassigned" (null branch_id) is always included when it has sales.
-    """
     tid = oid(tenant_id)
     if not tid:
         return []
 
-    # Group sales by branch.
     pipeline = [
         {"$match": {"tenant_id": tid}},
         {"$group": {
@@ -255,7 +248,6 @@ def consolidated_summary(tenant_id):
     ]
     rows = list(mongo.db.sales.aggregate(pipeline))
 
-    # Preload branch metadata (name + is_active).
     branch_ids = [r["_id"] for r in rows if r["_id"]]
     branches = {}
     if branch_ids:
@@ -274,8 +266,6 @@ def consolidated_summary(tenant_id):
         else:
             b = branches.get(bid)
             if not b:
-                # Sale references a branch that no longer exists.
-                # Skip it — it would confuse "active branch" reporting.
                 continue
             name = b.get("name") or str(bid)
             is_active = bool(b.get("is_active", True))
@@ -288,6 +278,5 @@ def consolidated_summary(tenant_id):
             "transactions": int(r["count"]),
         })
 
-    # Active branches first, then by revenue desc.
     out.sort(key=lambda x: (not x["is_active"], -x["revenue"]))
     return out
