@@ -62,7 +62,7 @@ class Config:
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = None
 
-    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI")
     RATELIMIT_DEFAULT = os.getenv("RATELIMIT_DEFAULT", "1000 per day;200 per hour")
     RATELIMIT_HEADERS_ENABLED = True
 
@@ -93,8 +93,8 @@ class Config:
     # SMS — Arkesel (replaces WhatsApp Cloud API)
     # ------------------------------------------------------------------
     # Leave ARKESEL_API_KEY empty to disable SMS sending (calls become no-ops).
-    ARKESEL_API_KEY = os.getenv("ARKESEL_API_KEY", "").strip()
-    ARKESEL_SENDER_ID = os.getenv("ARKESEL_SENDER_ID", "Pharmacole")
+    ARKESEL_API_KEY = os.getenv("ARKESEL_API_KEY").strip()
+    ARKESEL_SENDER_ID = os.getenv("ARKESEL_SENDER_ID")
     ARKESEL_BASE_URL = os.getenv("ARKESEL_BASE_URL", "https://sms.arkesel.com/api/v2").rstrip("/")
 
     # ------------------------------------------------------------------
@@ -102,7 +102,7 @@ class Config:
     # ------------------------------------------------------------------
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
-    VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:support@pharmacole.com")
+    VAPID_SUBJECT = os.getenv("VAPID_SUBJECT")
 
     # Uploads
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", os.path.abspath("uploads"))
