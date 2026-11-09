@@ -55,8 +55,9 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Revenue</p>
           <i class="fas fa-coins text-primary"></i>
         </div>
-        <p id="statRevenue" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.revenue|ghs }}</p>
-        <p id="statRevenueSub" class="text-xs text-gray-400 mt-1">From {{ summary.transactions }} transactions</p>
+        <!-- SAFE FALLBACK ADDED -->
+        <p id="statRevenue" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.revenue|default(0)|ghs }}</p>
+        <p id="statRevenueSub" class="text-xs text-gray-400 mt-1">From {{ summary.transactions|default(0) }} transactions</p>
       </div>
     </div>
 
@@ -67,7 +68,8 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Average sale</p>
           <i class="fas fa-chart-simple text-blue-500"></i>
         </div>
-        <p id="statAverage" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.average|ghs }}</p>
+        <!-- SAFE FALLBACK ADDED -->
+        <p id="statAverage" class="text-2xl sm:text-3xl font-extrabold text-gray-800 truncate">{{ summary.average|default(0)|ghs }}</p>
         <p class="text-xs text-gray-400 mt-1">Per transaction</p>
       </div>
     </div>
@@ -79,7 +81,8 @@
           <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Transactions</p>
           <i class="fas fa-receipt text-purple-500"></i>
         </div>
-        <p id="statCount" class="text-2xl sm:text-3xl font-extrabold text-gray-800">{{ summary.transactions }}</p>
+        <!-- SAFE FALLBACK ADDED -->
+        <p id="statCount" class="text-2xl sm:text-3xl font-extrabold text-gray-800">{{ summary.transactions|default(0) }}</p>
         <p id="statCountSub" class="text-xs text-gray-400 mt-1">All-time count</p>
       </div>
     </div>
@@ -94,7 +97,8 @@
       </span>
       <div class="min-w-0 flex-1">
         <p class="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Cash</p>
-        <p class="text-sm font-bold text-gray-800 truncate" data-method-total="cash">{{ summary.revenue|ghs }}</p>
+        <!-- SAFE FALLBACK ADDED -->
+        <p class="text-sm font-bold text-gray-800 truncate" data-method-total="cash">{{ summary.revenue|default(0)|ghs }}</p>
       </div>
     </button>
 
@@ -179,7 +183,8 @@
             </td>
             <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap">{{ s.timestamp|nice_datetime }}</td>
             <td class="px-5 py-3.5 text-gray-600 truncate max-w-[150px]">{{ s.cashier_name }}</td>
-            <td class="px-5 py-3.5 text-gray-600">{{ s.items|length }}</td>
+            <!-- SAFE FALLBACK ADDED -->
+            <td class="px-5 py-3.5 text-gray-600">{{ s.items|default([])|length }}</td>
             <td class="px-5 py-3.5">
               {% if s.payment_method == 'cash' %}
                 <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold inline-flex items-center gap-1">
@@ -239,7 +244,8 @@
         <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap mb-2">
           <span><i class="fas fa-user mr-1 text-gray-400"></i>{{ s.cashier_name }}</span>
           <span class="text-gray-300">·</span>
-          <span>{{ s.items|length }} items</span>
+          <!-- SAFE FALLBACK ADDED -->
+          <span>{{ s.items|default([])|length }} items</span>
           <span class="text-gray-300">·</span>
           {% if s.payment_method == 'cash' %}
             <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Cash</span>
@@ -260,7 +266,8 @@
             {% for item in s.items %}
             <li class="flex items-center justify-between gap-2">
               <span class="truncate">{{ item.name }}</span>
-              <span class="text-gray-400 whitespace-nowrap">×{{ item.quantity }}</span>
+              <!-- SAFE FALLBACK ADDED: Using `qty` instead of `quantity` -->
+              <span class="text-gray-400 whitespace-nowrap">×{{ item.qty|default(item.quantity)|default(0) }}</span>
             </li>
             {% endfor %}
           </ul>
