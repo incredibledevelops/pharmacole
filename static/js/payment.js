@@ -1,4 +1,4 @@
-// Paystack inline integration for auth/payment.html
+// Paystack inline V2 integration for auth/payment.html
 (function () {
   "use strict";
 
@@ -22,11 +22,13 @@
     var busy = false;
 
     function setLabel(html) { if (payBtnLabel) payBtnLabel.innerHTML = html; }
+    
     function setDisabled(d) {
       if (!payBtn) return;
       payBtn.disabled = !!d;
       payBtn.setAttribute("aria-busy", d ? "true" : "false");
     }
+
     function showError(msg, hint) {
       if (!payError || !payErrorMsg) return;
       payErrorMsg.textContent = msg || "Could not initialize payment. Please try again.";
@@ -35,20 +37,24 @@
       payError.classList.remove("hidden");
       payError.classList.add("flex");
     }
+
     function hideError() {
       if (!payError) return;
       payError.classList.add("hidden");
       payError.classList.remove("flex");
     }
+
     function showSuccess() {
       if (!paySuccess) return;
       paySuccess.classList.remove("hidden");
       paySuccess.classList.add("flex");
     }
+
     function labelDefault(cfg) {
       return '<i class="fas fa-lock"></i> Pay GH₵ ' +
         (cfg && cfg.amount ? cfg.amount.toFixed(2) : "") + ' with Paystack';
     }
+
     function startTimer() {
       if (!payTimer || !payTimerSeconds) return;
       timerStart = Date.now();
@@ -61,6 +67,7 @@
         payTimerSeconds.textContent = s + "s";
       }, 1000);
     }
+
     function stopTimer() {
       clearInterval(timerInterval);
       if (payTimer) { payTimer.classList.add("hidden"); payTimer.classList.remove("inline-flex"); }
@@ -120,14 +127,20 @@
 
     if (!payBtn) return;
 
-    // The one and only click handler.
     payBtn.addEventListener("click", function () {
       if (busy) return;
       busy = true;
       hideError();
 
-      // Always re-read cfg — the inline tier picker mutates it.
       var cfg = readCfg();
+      
+      // Safety check for Paystack V2
+      if (typeof PaystackPop === 'undefined') {
+        showError("Payment system failed to load. Please disable adblockers or check your internet connection.");
+        setDisabled(false);
+        busy = false;
+        return;
+      }
 
       setDisabled(true);
       setLabel('<i class="fas fa-spinner fa-spin"></i> Initializing...');
@@ -153,28 +166,17 @@
         });
       })
       .then(function (data) {
-        if (!data.reference && !data.access_code && !data.authorization_url) {
-          throw new Error("Payment provider did not return a valid response.");
+        if (!data.access_code) {
+          throw new Error("Payment provider did not return an access code.");
         }
         if (data.reference) rememberReference(data.reference);
 
-        var amountToCharge = data.amount || cfg.amount;
-
-        var handler = PaystackPop.setup({
+        // --- PAYSTACK V2 IMPLEMENTATION ---
+        var popup = new PaystackPop();
+        popup.checkout({
           key: cfg.publicKey,
-          email: cfg.email,
-          amount: Math.round(amountToCharge * 100),
-          currency: "GHS",
-          ref: data.reference,
-          metadata: {
-            tenant_code: cfg.tenantCode,
-            tier: data.tier || cfg.tier,
-            custom_fields: [
-              { display_name: "Tenant", variable_name: "tenant_code", value: cfg.tenantCode },
-              { display_name: "Tier", variable_name: "tier", value: data.tier || cfg.tier }
-            ]
-          },
-          callback: function (response) {
+          accessCode: data.access_code,
+          onSuccess: function(response) {
             setLabel('<i class="fas fa-spinner fa-spin"></i> Verifying payment...');
             fetch(cfg.verifyUrl + "?reference=" + encodeURIComponent(response.reference), {
               method: "POST",
@@ -206,7 +208,7 @@
                 renderRefreshButton();
               });
           },
-          onClose: function () {
+          onCancel: function() {
             setLabel(labelDefault(cfg));
             setDisabled(false);
             busy = false;
@@ -214,7 +216,6 @@
             renderRefreshButton();
           }
         });
-        handler.openIframe();
       })
       .catch(function (err) {
         console.error("[Paystack init]", err);

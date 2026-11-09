@@ -239,9 +239,11 @@
       </p>
 
       <div class="text-center mt-5">
-        <a href="{{ request.args.get('next') or url_for('main.redirect_dashboard') }}"
+        <!-- FIX: Prevents redirect loops for new signups -->
+        <a href="{{ url_for('auth.logout') if not is_tier_change else url_for('main.redirect_dashboard') }}"
           class="text-xs text-gray-500 hover:text-primary transition inline-flex items-center gap-1">
-          <i class="fas fa-arrow-left text-[10px]"></i> Back to dashboard
+          <i class="fas fa-arrow-left text-[10px]"></i> 
+          {% if not is_tier_change %}Cancel signup & logout{% else %}Back to dashboard{% endif %}
         </a>
       </div>
     </div>
@@ -252,7 +254,8 @@
   </div>
 </div>
 
-<script src="https://js.paystack.co/v1/inline.js"></script>
+<!-- FIX: Switched to Paystack V2 -->
+<script src="https://js.paystack.co/v2/inline.js"></script>
 
 <script>
   window.PHARMACOLE_PAYMENT = {
@@ -371,6 +374,14 @@
   })();
 </script>
 
+<!-- FIX: Load payment.js and immediately initialize it -->
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof window.initPaymentPage === 'function') {
+      window.initPaymentPage(window.PHARMACOLE_PAYMENT);
+    }
+  });
+</script>
 
 {% endblock %}

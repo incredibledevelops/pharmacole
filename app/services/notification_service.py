@@ -3,40 +3,26 @@ Notification service.
 
 Email   → Resend   (https://resend.com/docs/api-reference/emails/send-email)
 SMS     → Arkesel  (https://sms.arkesel.com/api/v2/sms/send)
-
-Both providers are optional: if the API key is not configured, the
-corresponding send function raises RuntimeError, which the caller
-already handles (returns 502 to the client). Web push is unchanged.
 """
 import json
-from datetime import datetime
-
+import base64
 import requests
 from flask import current_app
 
 from extensions import mongo
 from utils import oid
 
-
 # ---------------------------------------------------------------------------
 # Email — Resend
 # ---------------------------------------------------------------------------
-
 def send_email(to_email, subject, body_text, body_html=None, attachments=None):
-    """
-    Send an email via Resend.
-
-    attachments: list of (filename, mimetype, bytes) tuples.
-    Resend expects attachments as [{filename, content}], where `content`
-    is a base64-encoded string.
-    """
     cfg = current_app.config
     api_key = cfg.get("RESEND_API_KEY")
     if not api_key:
         raise RuntimeError("Resend is not configured (RESEND_API_KEY missing)")
 
     payload = {
-        "from": cfg["RESEND_FROM_EMAIL"],
+        "from": cfg.get("RESEND_FROM_EMAIL", "Pharmacole <onboarding@resend.dev>"),
         "to": [to_email],
         "subject": subject,
         "html": body_html or body_text,
@@ -44,12 +30,10 @@ def send_email(to_email, subject, body_text, body_html=None, attachments=None):
     }
 
     if attachments:
-        import base64
         payload["attachments"] = [
             {
                 "filename": filename,
                 "content": base64.b64encode(data).decode("ascii"),
-                # Resend infers content_type from filename; explicit is fine.
                 "content_type": mimetype,
             }
             for filename, mimetype, data in attachments
@@ -87,16 +71,17 @@ def email_receipt(to_email, tenant, sale, pdf_bytes=None):
         f"<p>Receipt: <strong>{sale.get('receipt_no')}</strong><br>"
         f"Total: <strong>GH₵ {sale.get('total_amount'):.2f}</strong></p>"
     )
+    
     attachments = []
     if pdf_bytes:
         attachments.append((f"{sale.get('receipt_no')}.pdf", "application/pdf", pdf_bytes))
+        
     return send_email(to_email, subject, text, html, attachments)
 
 
 # ---------------------------------------------------------------------------
-# SMS — Arkesel
+# SMS — Arkesel (unchanged)
 # ---------------------------------------------------------------------------
-
 def _arkesel_headers():
     cfg = current_app.config
     return {
@@ -104,15 +89,7 @@ def _arkesel_headers():
         "Content-Type": "application/json",
     }
 
-
 def send_sms(to_phone, message):
-    """
-    Send an SMS via Arkesel.
-
-    Arkesel's v2 API expects recipients as an array of phone numbers
-    in E.164-ish format. We normalize Ghanaian local numbers (0XXXXXXXXX)
-    to 233XXXXXXXXX.
-    """
     cfg = current_app.config
     if not cfg.get("ARKESEL_API_KEY"):
         raise RuntimeError("Arkesel is not configured (ARKESEL_API_KEY missing)")
@@ -145,16 +122,12 @@ def send_sms(to_phone, message):
     except ValueError:
         data = {}
 
-    # Arkesel returns {"status": "success", "data": {"id": "...", ...}}
-    # or {"status": "error", "message": "..."}
     if str(data.get("status", "")).lower() != "success":
         raise RuntimeError(data.get("message") or "Arkesel rejected the message")
 
     return data
 
-
 def sms_receipt(to_phone, tenant, sale):
-    """Send a compact receipt summary by SMS."""
     summary = (
         f"{tenant.pharmacy_name}\n"
         f"Receipt: {sale.get('receipt_no')}\n"
@@ -164,12 +137,7 @@ def sms_receipt(to_phone, tenant, sale):
     )
     return send_sms(to_phone, summary)
 
-
 def _normalize_phone(p):
-    """
-    Turn 024xxxxxxx into 23324xxxxxxx for Arkesel.
-    Also accepts +233… and bare 233… numbers.
-    """
     digits = "".join(ch for ch in str(p or "") if ch.isdigit())
     if not digits:
         return None
@@ -181,9 +149,8 @@ def _normalize_phone(p):
 
 
 # ---------------------------------------------------------------------------
-# Web Push (VAPID) — unchanged
+# Web Push (unchanged)
 # ---------------------------------------------------------------------------
-
 def _webpush(subscription_info, payload: dict):
     from pywebpush import webpush, WebPushException
     cfg = current_app.config
@@ -198,7 +165,6 @@ def _webpush(subscription_info, payload: dict):
     except WebPushException as e:
         current_app.logger.warning("WebPush failed: %s", e)
         return False
-
 
 def push_to_user(tenant_id, user_id, title, body, url=None):
     tid = oid(tenant_id)
@@ -216,7 +182,6 @@ def push_to_user(tenant_id, user_id, title, body, url=None):
         else:
             mongo.db.push_subscriptions.delete_one({"_id": s["_id"]})
     return count
-
 
 def push_to_tenant(tenant_id, title, body, url=None, role=None):
     tid = oid(tenant_id)

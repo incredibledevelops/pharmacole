@@ -35,7 +35,7 @@ def checkout():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    # Optional automatic delivery: "email", "sms", or "both".
+    # Optional automatic delivery
     deliver = (data.get("deliver") or "").lower()
     customer_email = data.get("customer_email")
     customer_phone = data.get("customer_phone")
@@ -44,12 +44,14 @@ def checkout():
         try:
             _email_receipt(customer_email, receipt)
         except Exception as e:
+            current_app.logger.error(f"Email receipt failed: {e}")
             receipt["email_error"] = str(e)
 
     if deliver in ("sms", "both") and customer_phone:
         try:
             _sms_receipt(customer_phone, receipt)
         except Exception as e:
+            current_app.logger.error(f"SMS receipt failed: {e}")
             receipt["sms_error"] = str(e)
 
     return jsonify(receipt), 200
@@ -94,62 +96,6 @@ def list_sales():
     return jsonify({"items": out})
 
 
-@api_bp.route("/sales/today", methods=["GET"])
-@token_required
-@api_subscription_required
-def today():
-    branch_id = request.args.get("branch_id")
-    return jsonify({
-        "revenue": sales_service.revenue_today(g.api_user.tenant_id, branch_id=branch_id),
-    })
-
-
-@api_bp.route("/sales/sync", methods=["POST"])
-@token_required
-@api_role_required("cashier", "owner", "pharmacist")
-@api_subscription_required
-def sync_offline():
-    """Accept a batch of offline sales. Each must carry a client_uuid."""
-    data = request.get_json(silent=True) or {}
-    batch = data.get("sales") or []
-    results = []
-
-    for row in batch:
-        client_uuid = (row.get("client_uuid") or "").strip()
-        if not client_uuid:
-            results.append({
-                "client_uuid": None,
-                "ok": False,
-                "error": "client_uuid is required for offline sync",
-            })
-            continue
-        try:
-            r = sales_service.record_sale(
-                tenant_id=g.api_user.tenant_id,
-                cashier=g.api_user,
-                items=row.get("items") or [],
-                payment_method=(row.get("payment_method") or "").strip().lower(),
-                branch_id=row.get("branch_id") or g.api_user.branch_id,
-                client_uuid=client_uuid,
-                customer_name=row.get("customer_name"),
-                discount=row.get("discount", 0.0),
-            )
-            results.append({"client_uuid": client_uuid, "ok": True,
-                            "receipt_no": r["receipt_no"]})
-        except sales_service.IdempotentReplay as replay:
-            results.append({
-                "client_uuid": client_uuid,
-                "ok": True,
-                "receipt_no": replay.existing["receipt_no"],
-                "idempotent": True,
-            })
-        except Exception as e:
-            results.append({"client_uuid": client_uuid, "ok": False,
-                            "error": str(e)})
-
-    return jsonify({"results": results}), 200
-
-
 # ---------------------------------------------------------------------------
 # helper functions
 # ---------------------------------------------------------------------------
@@ -157,19 +103,18 @@ def sync_offline():
 def _email_receipt(to_email, receipt_dict):
     from models import find_tenant_by_id
     from app.services import receipt_service, notification_service
+    
     tenant = find_tenant_by_id(g.api_user.tenant_id)
     sale = _sale_dict_for_receipt(receipt_dict)
-    pdf = None
-    try:
-        pdf = receipt_service.receipt_pdf(tenant, sale)
-    except Exception:
-        pdf = None
+    
+    pdf = receipt_service.receipt_pdf(tenant, sale)
     notification_service.email_receipt(to_email, tenant, sale, pdf_bytes=pdf)
 
 
 def _sms_receipt(to_phone, receipt_dict):
     from models import find_tenant_by_id
     from app.services import notification_service
+    
     tenant = find_tenant_by_id(g.api_user.tenant_id)
     sale = _sale_dict_for_receipt(receipt_dict)
     notification_service.sms_receipt(to_phone, tenant, sale)
