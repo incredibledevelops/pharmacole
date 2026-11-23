@@ -26,6 +26,12 @@ _API_OPEN_PREFIXES = (
 
 @api_bp.before_request
 def _gate_api():
+    """
+    The API is now available on ALL tiers via the `mobile_app` feature.
+    The enterprise-only `api_access` flag still exists for external
+    integrations but is no longer the gate here — a tenant needs EITHER
+    `mobile_app` (all tiers) OR `api_access` (enterprise) to use the API.
+    """
     from flask import request as _req
     path = _req.path
     if any(path.startswith(p) for p in _API_OPEN_PREFIXES):
@@ -38,11 +44,14 @@ def _gate_api():
         return None
     if not tenant:
         return jsonify({"error": "Tenant not found"}), 403
-    if not tenant_has_feature(tenant._id, "api_access"):
+    if not (
+        tenant_has_feature(tenant._id, "mobile_app")
+        or tenant_has_feature(tenant._id, "api_access")
+    ):
         return jsonify({
             "error": "Your plan does not include API access",
             "code": "tier_upgrade_required",
-            "feature": "api_access",
+            "feature": "mobile_app",
             "upgrade_url": "/owner/subscription",
         }), 402
     return None
@@ -63,6 +72,9 @@ _SUBMODULES = [
     "receipts",
     "audit",
     "branding",
+    "payments",
+    "refresh",
+    "super_admin",
 ]
 
 for _name in _SUBMODULES:

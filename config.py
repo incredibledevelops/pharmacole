@@ -71,46 +71,26 @@ class Config:
     JSON_SORT_KEYS = False
     TEMPLATES_AUTO_RELOAD = _bool("FLASK_DEBUG", False)
 
-    # ------------------------------------------------------------------
-    # API / JWT
-    # ------------------------------------------------------------------
     JWT_SECRET = os.getenv("JWT_SECRET")
     JWT_ALGORITHM = "HS256"
     JWT_ACCESS_TTL = timedelta(days=_int("JWT_ACCESS_TTL_DAYS", 30))
     JWT_REFRESH_TTL = timedelta(days=_int("JWT_REFRESH_TTL_DAYS", 120))
     CORS_ORIGINS = _cors_origins()
 
-    # ------------------------------------------------------------------
-    # Email — Resend (replaces SMTP)
-    # ------------------------------------------------------------------
-    # Leave RESEND_API_KEY empty to disable email sending (calls become no-ops).
     RESEND_API_KEY = os.getenv("RESEND_API_KEY").strip()
-    # Must be a verified domain on Resend. Supports "Name <email>" format,
-    # e.g. "Pharmacole <receipts@pharmacole.com>".
-    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Pharmacole <receipts@pharmacole.com>")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Pharmacole <receipts@pharmacole.app>")
 
-    # ------------------------------------------------------------------
-    # SMS — Arkesel (replaces WhatsApp Cloud API)
-    # ------------------------------------------------------------------
-    # Leave ARKESEL_API_KEY empty to disable SMS sending (calls become no-ops).
     ARKESEL_API_KEY = os.getenv("ARKESEL_API_KEY").strip()
     ARKESEL_SENDER_ID = os.getenv("ARKESEL_SENDER_ID")
     ARKESEL_BASE_URL = os.getenv("ARKESEL_BASE_URL", "https://sms.arkesel.com/api/v2").rstrip("/")
 
-    # ------------------------------------------------------------------
-    # Web push (unchanged — separate from email/SMS)
-    # ------------------------------------------------------------------
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
     VAPID_SUBJECT = os.getenv("VAPID_SUBJECT")
 
-    # Uploads
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", os.path.abspath("uploads"))
     ALLOWED_LOGO_EXT = {"png", "jpg", "jpeg", "webp", "svg"}
 
-    # ------------------------------------------------------------------
-    # Pricing tiers (unchanged)
-    # ------------------------------------------------------------------
     PRICING_TIERS = {
         "starter": {
             "label": "Starter",
@@ -118,13 +98,17 @@ class Config:
             "branches": 1,
             "users": 3,
             "tagline": "For a single counter",
-            "features": ["pos", "inventory", "expiry", "email_receipts"],
+            "features": [
+                "pos", "inventory", "expiry", "email_receipts",
+                "mobile_app",
+            ],
             "feature_list": [
                 "Point of Sale (1 branch)",
                 "Inventory & expiry tracking",
                 "Up to 3 users",
                 "Email receipts",
                 "Basic reports",
+                "Mobile app access",
             ],
         },
         "pro": {
@@ -136,6 +120,7 @@ class Config:
             "features": [
                 "pos", "inventory", "expiry", "email_receipts",
                 "sms_receipts", "reports", "suppliers", "audit_log",
+                "mobile_app",
             ],
             "feature_list": [
                 "Everything in Starter",
@@ -144,6 +129,7 @@ class Config:
                 "CSV exports + shift reports",
                 "SMS receipts",
                 "Audit log",
+                "Mobile app access",
             ],
             "highlight": True,
         },
@@ -157,6 +143,7 @@ class Config:
                 "pos", "inventory", "expiry", "email_receipts",
                 "sms_receipts", "reports", "suppliers", "audit_log",
                 "multi_branch", "consolidated_reports", "branding",
+                "mobile_app",
             ],
             "feature_list": [
                 "Everything in Pro",
@@ -164,6 +151,7 @@ class Config:
                 "Consolidated multi-branch reports",
                 "Custom branding on receipts",
                 "Priority support",
+                "Mobile app access",
             ],
         },
         "enterprise": {
@@ -177,6 +165,7 @@ class Config:
                 "sms_receipts", "reports", "suppliers", "audit_log",
                 "multi_branch", "consolidated_reports", "branding",
                 "api_access", "sla",
+                "mobile_app",
             ],
             "feature_list": [
                 "Everything in Business",
@@ -184,6 +173,7 @@ class Config:
                 "Full REST API access",
                 "SLA + dedicated onboarding",
                 "Custom integrations",
+                "Mobile app access",
             ],
         },
     }
@@ -210,7 +200,6 @@ class TestingConfig(Config):
 
 
 def _resolve_jwt_secret(config_obj, env: str) -> None:
-    """Ensure JWT_SECRET is set. In production, refuse to boot without it."""
     secret = getattr(config_obj, "JWT_SECRET", None) or getattr(config_obj, "SECRET_KEY", None)
 
     if env == "production":
