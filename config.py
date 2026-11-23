@@ -28,7 +28,7 @@ def _float(key: str, default: float) -> float:
 
 
 def _cors_origins():
-    raw = os.getenv("CORS_ORIGINS", "*").strip()
+    raw = os.getenv("CORS_ORIGINS").strip()
     if raw == "*":
         return "*"
     return [o.strip() for o in raw.replace(",", " ").split() if o.strip()]
@@ -78,7 +78,7 @@ class Config:
     CORS_ORIGINS = _cors_origins()
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY").strip()
-    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Pharmacole <receipts@pharmacole.app>")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
 
     ARKESEL_API_KEY = os.getenv("ARKESEL_API_KEY").strip()
     ARKESEL_SENDER_ID = os.getenv("ARKESEL_SENDER_ID")
