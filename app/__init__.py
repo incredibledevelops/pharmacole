@@ -5,7 +5,7 @@ from flask import Flask, request, g, send_from_directory, redirect, url_for
 from flask_login import current_user
 
 from config import get_config
-from extensions import mongo, login_manager, csrf, limiter, cors
+from extensions import mongo, login_manager, csrf, limiter, cors, socketio
 from utils import register_jinja, oid
 from models import ensure_indexes
 
@@ -18,6 +18,7 @@ def create_app(config_class=None):
     mongo.init_app(app, uri=app.config["MONGO_URI"])
     login_manager.init_app(app)
     csrf.init_app(app)
+    socketio.init_app(app)
 
     cors.init_app(
         app,
@@ -116,18 +117,6 @@ def create_app(config_class=None):
 
     # ------------------------------------------------------------------
     # CSRF exemptions
-    #
-    # The /api/v1/* blueprint is a stateless, JWT-authenticated API. It is
-    # consumed by:
-    #   • the Electron desktop app (no cookie session, no CSRF token)
-    #   • offline POS sync (no cookie session, no CSRF token)
-    #   • external integrations on the Enterprise tier
-    #
-    # Flask-WTF's CSRFProtect only makes sense for cookie-authenticated
-    # browser POSTs. Applying it to the API causes every desktop login to
-    # fail with a bare "HTTP 400" HTML response.
-    #
-    # Flask-WTF supports blueprint-scoped exemptions via csrf.exempt(bp).
     # ------------------------------------------------------------------
     if api_registered:
         try:

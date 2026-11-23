@@ -126,6 +126,13 @@ def record_sale(tenant_id, cashier, items, payment_method,
         meta={"total": total, "items": len(clean_items), "method": payment_method},
     )
 
+    # Broadcast to real-time web dashboard
+    try:
+        from app.blueprints.api.websockets import broadcast_sale
+        broadcast_sale(str(tid), _sale_to_dict(sale_doc))
+    except Exception:
+        pass
+
     return _sale_to_dict(sale_doc)
 
 

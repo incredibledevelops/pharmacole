@@ -75,6 +75,8 @@ _SUBMODULES = [
     "payments",
     "refresh",
     "super_admin",
+    "employees",
+    "suppliers",
 ]
 
 for _name in _SUBMODULES:
